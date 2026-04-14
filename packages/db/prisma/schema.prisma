@@ -1,0 +1,207 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["public", "auth"]
+}
+
+// ========== Supabase Auth mirror (read-only via RLS) ==========
+// Supabase manages `auth.users`. We reference its UUID in our tables.
+
+model User {
+  id         String   @id @db.Uuid
+  email      String   @unique
+  name       String?
+  avatarUrl  String?  @map("avatar_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  profile          Profile?
+  resumeVariants   ResumeVariant[]
+  applications     Application[]
+  targetCompanies  TargetCompany[]
+  discoveryEvents  DiscoveryEvent[]
+
+  @@map("users")
+  @@schema("public")
+}
+
+model Profile {
+  userId             String   @id @map("user_id") @db.Uuid
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseResumeText     String   @default("") @map("base_resume_text")
+  skills             String[] @default([])
+  targetRoles        String[] @default([]) @map("target_roles")
+  targetLocations    String[] @default([]) @map("target_locations")
+  linkedinUrl        String?  @map("linkedin_url")
+  githubUrl          String?  @map("github_url")
+  portfolioUrl       String?  @map("portfolio_url")
+  phone              String?
+  authorizedToWorkUs Boolean  @default(false) @map("authorized_to_work_us")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("profiles")
+  @@schema("public")
+}
+
+model ResumeVariant {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  bullets          Json     @default("[]")   // [{ section: string, items: string[] }]
+  emphasisKeywords String[] @default([]) @map("emphasis_keywords")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  applications Application[]
+
+  @@index([userId])
+  @@map("resume_variants")
+  @@schema("public")
+}
+
+enum AtsSource {
+  greenhouse
+  lever
+  ashby
+  workday
+  icims
+  manual
+
+  @@schema("public")
+}
+
+model JobPosting {
+  id             String    @id @default(uuid()) @db.Uuid
+  sourceUrl      String    @unique @map("source_url")
+  sourceAts      AtsSource @map("source_ats")
+  company        String
+  title          String
+  location       String?
+  requirements   String[]  @default([])
+  description    String    @default("")
+  rawHtml        String    @default("") @map("raw_html")
+  discoveredAt   DateTime  @default(now()) @map("discovered_at")
+  postedAt       DateTime? @map("posted_at")
+
+  applications    Application[]
+  discoveryEvents DiscoveryEvent[]
+
+  @@map("job_postings")
+  @@schema("public")
+}
+
+enum ApplicationStatus {
+  wishlist
+  applied
+  phone_screen
+  onsite
+  offer
+  rejected
+  ghosted
+
+  @@schema("public")
+}
+
+model Application {
+  id                    String            @id @default(uuid()) @db.Uuid
+  userId                String            @map("user_id") @db.Uuid
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobPostingId          String            @map("job_posting_id") @db.Uuid
+  jobPosting            JobPosting        @relation(fields: [jobPostingId], references: [id])
+  resumeVariantId       String?           @map("resume_variant_id") @db.Uuid
+  resumeVariant         ResumeVariant?    @relation(fields: [resumeVariantId], references: [id])
+  status                ApplicationStatus @default(wishlist)
+  appliedAt             DateTime?         @map("applied_at")
+  lastActivityAt        DateTime          @default(now()) @updatedAt @map("last_activity_at")
+  followUpAt            DateTime?         @map("follow_up_at")
+  notes                 String            @default("")
+  contacts              Json              @default("[]") // [{ name, role, email, linkedin }]
+  currentCoverLetterId  String?           @map("current_cover_letter_id") @db.Uuid
+  currentAnswersId      String?           @map("current_answers_id") @db.Uuid
+
+  drafts DraftedContent[]
+
+  @@unique([userId, jobPostingId])
+  @@index([userId, status])
+  @@map("applications")
+  @@schema("public")
+}
+
+enum DraftKind {
+  cover_letter
+  free_text_answer
+  resume_bullets
+
+  @@schema("public")
+}
+
+model DraftedContent {
+  id                   String      @id @default(uuid()) @db.Uuid
+  applicationId        String      @map("application_id") @db.Uuid
+  application          Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  kind                 DraftKind
+  version              Int
+  parentDraftId        String?     @map("parent_draft_id") @db.Uuid
+  parent               DraftedContent?  @relation("DraftVersion", fields: [parentDraftId], references: [id])
+  children             DraftedContent[] @relation("DraftVersion")
+  originalPromptInputs Json        @map("original_prompt_inputs")
+  aiDraft              String      @map("ai_draft")
+  userEdited           String      @default("") @map("user_edited")
+  finalized            Boolean     @default(false)
+  createdAt            DateTime    @default(now()) @map("created_at")
+  finalizedAt          DateTime?   @map("finalized_at")
+
+  @@unique([applicationId, kind, version])
+  @@index([applicationId, kind])
+  @@map("drafted_content")
+  @@schema("public")
+}
+
+model TargetCompany {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  atsType       AtsSource @map("ats_type")
+  atsBoardToken String    @map("ats_board_token")
+  lastPolledAt  DateTime? @map("last_polled_at")
+  active        Boolean   @default(true)
+
+  discoveryEvents DiscoveryEvent[]
+
+  @@unique([userId, atsType, atsBoardToken])
+  @@map("target_companies")
+  @@schema("public")
+}
+
+enum MatchTier {
+  strong_fit
+  possible_fit
+  weak_fit
+
+  @@schema("public")
+}
+
+model DiscoveryEvent {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetCompanyId String        @map("target_company_id") @db.Uuid
+  targetCompany   TargetCompany @relation(fields: [targetCompanyId], references: [id])
+  jobPostingId    String        @map("job_posting_id") @db.Uuid
+  jobPosting      JobPosting    @relation(fields: [jobPostingId], references: [id])
+  matchTier       MatchTier     @map("match_tier")
+  matchRationale  String        @map("match_rationale")
+  digestSentAt    DateTime?     @map("digest_sent_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([userId, digestSentAt])
+  @@map("discovery_events")
+  @@schema("public")
+}
