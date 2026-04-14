@@ -9,7 +9,7 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
-    "apply:policies": "psql $DIRECT_URL -f supabase/policies.sql"
+    "apply:policies": "node scripts/apply-policies.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.15.0"

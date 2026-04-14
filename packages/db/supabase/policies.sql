@@ -8,30 +8,39 @@ alter table public.discovery_events enable row level security;
 
 -- Users table: readable only for own row
 alter table public.users enable row level security;
+drop policy if exists users_self_read on public.users;
 create policy users_self_read on public.users
   for select using (auth.uid() = id);
+drop policy if exists users_self_update on public.users;
 create policy users_self_update on public.users
   for update using (auth.uid() = id);
+drop policy if exists users_self_insert on public.users;
 create policy users_self_insert on public.users
   for insert with check (auth.uid() = id);
 
 -- Helper: direct user_id policies
+drop policy if exists profiles_owner on public.profiles;
 create policy profiles_owner on public.profiles
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists resume_variants_owner on public.resume_variants;
 create policy resume_variants_owner on public.resume_variants
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists applications_owner on public.applications;
 create policy applications_owner on public.applications
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists target_companies_owner on public.target_companies;
 create policy target_companies_owner on public.target_companies
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists discovery_events_owner on public.discovery_events;
 create policy discovery_events_owner on public.discovery_events
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- drafted_content: access via its parent application
+drop policy if exists drafted_content_owner on public.drafted_content;
 create policy drafted_content_owner on public.drafted_content
   for all using (
     exists (
@@ -48,8 +57,10 @@ create policy drafted_content_owner on public.drafted_content
 
 -- job_postings: readable by anyone authenticated (shared dimension table)
 alter table public.job_postings enable row level security;
+drop policy if exists job_postings_read on public.job_postings;
 create policy job_postings_read on public.job_postings
   for select using (auth.role() = 'authenticated');
+drop policy if exists job_postings_insert on public.job_postings;
 create policy job_postings_insert on public.job_postings
   for insert with check (auth.role() = 'authenticated');
 -- no update/delete policies: app inserts are append-only
