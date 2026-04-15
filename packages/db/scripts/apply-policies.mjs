@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Applies supabase/policies.sql using the psql CLI.
-// Reads DIRECT_URL from the environment. Works on Windows, macOS, Linux.
+// Applies supabase/policies.sql via the `pg` library.
+// Reads DIRECT_URL from the environment. No psql install required.
 
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import pg from "pg";
 
 const url = process.env.DIRECT_URL;
 if (!url) {
@@ -17,17 +17,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const sqlPath = resolve(here, "..", "supabase", "policies.sql");
 const sql = readFileSync(sqlPath, "utf8");
 
-const res = spawnSync("psql", [url, "-v", "ON_ERROR_STOP=1"], {
-  input: sql,
-  stdio: ["pipe", "inherit", "inherit"],
-  shell: false,
+const client = new pg.Client({
+  connectionString: url,
+  ssl: { rejectUnauthorized: false },
 });
 
-if (res.error && res.error.code === "ENOENT") {
-  console.error(
-    "psql not found on PATH. Install PostgreSQL client tools (e.g. `winget install PostgreSQL.PostgreSQL` " +
-      "on Windows, or use Supabase CLI's bundled psql by adding its bin dir to PATH)."
-  );
+try {
+  await client.connect();
+  await client.query(sql);
+  console.log("Policies applied successfully.");
+} catch (err) {
+  console.error("Failed to apply policies:", err.message);
   process.exit(1);
+} finally {
+  await client.end();
 }
-process.exit(res.status ?? 1);

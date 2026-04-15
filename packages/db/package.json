@@ -9,12 +9,13 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
-    "apply:policies": "node scripts/apply-policies.mjs"
+    "apply:policies": "node --env-file=.env scripts/apply-policies.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.15.0"
   },
   "devDependencies": {
+    "pg": "^8.20.0",
     "prisma": "^5.15.0",
     "typescript": "^5.4.5"
   }
