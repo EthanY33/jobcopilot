@@ -41,7 +41,7 @@ export function buildCoverLetterRequest(
     model: "claude-sonnet-4-6",
     max_tokens: 1200,
     temperature: 0.7,
-    system: buildCachedPrefix(inputs.cached),
+    system: buildCachedPrefix(inputs.cached) as Anthropic.Messages.TextBlockParam[],
     messages: [{ role: "user", content: variable }],
   };
 }

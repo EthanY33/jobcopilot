@@ -10,17 +10,10 @@ export interface CachedPrefixInputs {
 /**
  * Builds the cached prefix for Claude prompts. Every drafting call on this
  * user should share this prefix so the cache hits.
- *
- * Uses PromptCachingBetaTextBlockParam because cache_control is not on the
- * base TextBlockParam in SDK 0.30.x — it lives in the beta prompt-caching
- * namespace. Callers pass the result as the `system` field via the beta
- * messages endpoint (client.beta.promptCaching.messages.create) or cast for
- * the standard endpoint where the API accepts it but the SDK types don't
- * express it.
  */
 export function buildCachedPrefix(
   inputs: CachedPrefixInputs,
-): Anthropic.Beta.PromptCaching.PromptCachingBetaTextBlockParam[] {
+): Anthropic.Messages.MessageParam["content"] {
   const text = [
     "You are a career writing assistant for an engineering job seeker.",
     "",

@@ -13,9 +13,6 @@ export interface ParsedResume {
 export function buildResumeParseRequest(
   inputs: ParseResumeInputs,
 ): Anthropic.Messages.MessageCreateParamsNonStreaming {
-  // The `document` content block (for PDF upload) is supported by the Claude
-  // API but is not typed in @anthropic-ai/sdk@0.30.x. The cast is scoped here;
-  // all callers receive a correctly-shaped MessageCreateParamsNonStreaming.
   return {
     model: "claude-sonnet-4-6",
     max_tokens: 8000,
@@ -49,7 +46,7 @@ export function buildResumeParseRequest(
               "sections = array of { section, items } where items are the raw bullet strings under that section (Experience role entries, Projects, Leadership, etc.)",
             ].join("\n"),
           },
-        ] as unknown as Anthropic.Messages.MessageParam["content"],
+        ],
       },
     ],
   };
