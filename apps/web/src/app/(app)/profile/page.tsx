@@ -18,23 +18,39 @@ interface Profile {
   authorizedToWorkUs: boolean;
 }
 
+function splitCsv(s: string): string[] {
+  return s.split(",").map((x) => x.trim()).filter(Boolean);
+}
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [rolesInput, setRolesInput] = useState("");
+  const [locationsInput, setLocationsInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   async function load() {
     const r = await fetch("/api/profile");
-    setProfile(await r.json());
+    if (!r.ok) {
+      setLoadError(`Failed to load profile (${r.status})`);
+      return;
+    }
+    const p = (await r.json()) as Profile;
+    setProfile(p);
+    setRolesInput(p.targetRoles.join(", "));
+    setLocationsInput(p.targetLocations.join(", "));
   }
+
   useEffect(() => {
     load();
   }, []);
 
   async function onUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
+    setUploadError(null);
     const form = new FormData(e.currentTarget);
     if (!(form.get("file") instanceof File)) return;
     setUploading(true);
@@ -44,7 +60,7 @@ export default function ProfilePage() {
       if (!res.ok) throw new Error(json.error ?? "upload failed");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "upload failed");
+      setUploadError(err instanceof Error ? err.message : "upload failed");
     } finally {
       setUploading(false);
     }
@@ -53,23 +69,46 @@ export default function ProfilePage() {
   async function save() {
     if (!profile) return;
     setSaving(true);
-    await fetch("/api/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        targetRoles: profile.targetRoles,
-        targetLocations: profile.targetLocations,
-        linkedinUrl: profile.linkedinUrl,
-        githubUrl: profile.githubUrl,
-        portfolioUrl: profile.portfolioUrl,
-        phone: profile.phone,
-        authorizedToWorkUs: profile.authorizedToWorkUs,
-      }),
-    });
-    setSaving(false);
+    setSaveMessage(null);
+    try {
+      const nextRoles = splitCsv(rolesInput);
+      const nextLocations = splitCsv(locationsInput);
+      const r = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetRoles: nextRoles,
+          targetLocations: nextLocations,
+          linkedinUrl: profile.linkedinUrl,
+          githubUrl: profile.githubUrl,
+          portfolioUrl: profile.portfolioUrl,
+          phone: profile.phone,
+          authorizedToWorkUs: profile.authorizedToWorkUs,
+        }),
+      });
+      const json = await r.json();
+      if (!r.ok) {
+        const msg =
+          typeof json.error === "string" ? json.error : JSON.stringify(json.error);
+        throw new Error(msg);
+      }
+      setProfile({ ...profile, targetRoles: nextRoles, targetLocations: nextLocations });
+      setSaveMessage("Saved");
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? `Save failed: ${err.message}` : "Save failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  if (!profile) return <div className="text-sm text-muted-foreground">Loading...</div>;
+  if (!profile) {
+    return (
+      <div className="space-y-2 text-sm text-muted-foreground">
+        <div>Loading...</div>
+        {loadError && <div className="text-destructive">{loadError}</div>}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -86,7 +125,7 @@ export default function ProfilePage() {
             {uploading ? "Parsing..." : "Upload"}
           </Button>
         </form>
-        {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+        {uploadError && <p className="mt-2 text-sm text-destructive">{uploadError}</p>}
       </section>
 
       <section className="rounded-lg border border-border bg-card p-6 space-y-4">
@@ -122,25 +161,12 @@ export default function ProfilePage() {
           </Field>
         </div>
         <Field label="Target roles (comma-separated)">
-          <Input
-            value={profile.targetRoles.join(", ")}
-            onChange={(e) =>
-              setProfile({
-                ...profile,
-                targetRoles: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-              })
-            }
-          />
+          <Input value={rolesInput} onChange={(e) => setRolesInput(e.target.value)} />
         </Field>
         <Field label="Target locations (comma-separated)">
           <Input
-            value={profile.targetLocations.join(", ")}
-            onChange={(e) =>
-              setProfile({
-                ...profile,
-                targetLocations: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-              })
-            }
+            value={locationsInput}
+            onChange={(e) => setLocationsInput(e.target.value)}
           />
         </Field>
         <label className="flex items-center gap-2 text-sm">
@@ -151,9 +177,22 @@ export default function ProfilePage() {
           />
           Authorized to work in the US
         </label>
-        <Button onClick={save} disabled={saving}>
-          {saving ? "Saving..." : "Save"}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </Button>
+          {saveMessage && (
+            <span
+              className={
+                saveMessage.startsWith("Save failed")
+                  ? "text-sm text-destructive"
+                  : "text-sm text-muted-foreground"
+              }
+            >
+              {saveMessage}
+            </span>
+          )}
+        </div>
       </section>
 
       <section className="rounded-lg border border-border bg-card p-6">
