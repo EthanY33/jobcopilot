@@ -751,6 +751,12 @@ git commit -m "feat(db): prisma schema + supabase RLS policies"
 
 ## Task 3: `packages/shared` — types + Zod schemas
 
+> **Shipped notes (as of commit `79d39aa`):** the committed code tightened the plan's verbatim shapes based on code review. If re-implementing, prefer the shipped versions over the plan's verbatim below:
+> - `APPLICATION_STATUSES` is `[...] as const satisfies readonly ApplicationStatus[]` (not `: ApplicationStatus[]`) — readonly tuple, exhaustive against the union.
+> - `Contact`'s optional fields are `role?: string | undefined` / `email?: string | undefined` / `linkedin?: string | undefined` — required for assignability from `z.infer<typeof contactSchema>` under `exactOptionalPropertyTypes`.
+> - `draftCoverLetterResponseSchema.alternateOpenings` is `z.tuple([z.string(), z.string(), z.string()])` (not `z.array(z.string()).length(3)`) — gives consumers a `[string, string, string]` type.
+> - `atsSourceSchema` is extracted as a named export; `AtsSource` is `z.infer<typeof atsSourceSchema>`; `extractedJobPostingSchema.sourceAts` references `atsSourceSchema`. Single source of truth.
+
 **Files:**
 - Create: `packages/shared/package.json`
 - Create: `packages/shared/tsconfig.json`
@@ -941,6 +947,20 @@ git commit -m "feat(shared): types + zod schemas"
 
 ## Task 4: `packages/prompts` — prompt builders + eval harness
 
+> **Shipped notes (as of commits `ab8c020` → `d6e3d3e` → `c8a3b2d`):** the plan's verbatim code wouldn't compile against SDK 0.30.x (the originally-pinned version) and lacked defensive parsing. Amendments made during execution, already reflected below:
+> - `@anthropic-ai/sdk` pinned to `^0.89.0` (not `^0.30.0`). 0.30.x lacks base-type `cache_control` on `TextBlockParam` and the `document` content block; 0.89+ has both as GA.
+> - `@types/node` added to devDependencies — required for `fs`/`path`/`__dirname`/`process.env` under strict TS.
+> - All four builders return `Anthropic.Messages.MessageCreateParamsNonStreaming` (not `MessageCreateParams`). Required because the union version can't be narrowed to `Message` when passed to `messages.create()`.
+> - `buildCachedPrefix` returns `Anthropic.Messages.TextBlockParam[]` directly (not `MessageParam["content"]`). Callers drop the `as TextBlockParam[]` cast.
+>
+> **Beyond the plan (hardening applied in `c8a3b2d` per code review):** not mandatory to re-execute, but recommended for parity with shipped code:
+> - Added shared helper `packages/prompts/src/extract-json.ts` — tries strict parse, falls back to brace-slicing. All 4 parsers use it.
+> - `parseJobExtractionResponse` validates via `extractedJobPostingSchema.parse(parsed)` from `@jobcopilot/shared`.
+> - `parseResumeResponse` runtime-checks `baseResumeText`, `skills`, and `sections` shape.
+> - `parseBulletSuggestionsResponse` runtime-checks each suggestion has all 4 string fields.
+> - `parseCoverLetterResponse` runtime-checks `alternateOpenings.every(s => typeof s === "string")`.
+> - `evals/run.ts` prechecks `ANTHROPIC_API_KEY` with descriptive error before constructing the client.
+
 **Files:**
 - Create: `packages/prompts/package.json`
 - Create: `packages/prompts/tsconfig.json`
@@ -949,6 +969,7 @@ git commit -m "feat(shared): types + zod schemas"
 - Create: `packages/prompts/src/resume-bullets.ts`
 - Create: `packages/prompts/src/job-extraction.ts`
 - Create: `packages/prompts/src/resume-parse.ts`
+- Create: `packages/prompts/src/extract-json.ts` (shipped; not in original plan)
 - Create: `packages/prompts/src/index.ts`
 - Create: `packages/prompts/evals/fixtures/googleyoutube-app-engineer.json` (one fixture to start)
 - Create: `packages/prompts/evals/rubrics/cover-letter.json`
@@ -968,10 +989,11 @@ git commit -m "feat(shared): types + zod schemas"
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.30.0",
+    "@anthropic-ai/sdk": "^0.89.0",
     "@jobcopilot/shared": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "tsx": "^4.15.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
@@ -1011,7 +1033,7 @@ export interface CachedPrefixInputs {
  */
 export function buildCachedPrefix(
   inputs: CachedPrefixInputs,
-): Anthropic.Messages.MessageParam["content"] {
+): Anthropic.Messages.TextBlockParam[] {
   const text = [
     "You are a career writing assistant for an engineering job seeker.",
     "",
@@ -1065,7 +1087,7 @@ export interface CoverLetterOutput {
 
 export function buildCoverLetterRequest(
   inputs: CoverLetterInputs,
-): Anthropic.Messages.MessageCreateParams {
+): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const variable = [
     `Target role: ${inputs.title} at ${inputs.company}`,
     "",
@@ -1089,7 +1111,7 @@ export function buildCoverLetterRequest(
     model: "claude-sonnet-4-6",
     max_tokens: 1200,
     temperature: 0.7,
-    system: buildCachedPrefix(inputs.cached) as Anthropic.Messages.TextBlockParam[],
+    system: buildCachedPrefix(inputs.cached),
     messages: [{ role: "user", content: variable }],
   };
 }
@@ -1142,7 +1164,7 @@ export interface BulletSuggestion {
 
 export function buildSuggestBulletsRequest(
   inputs: SuggestBulletsInputs,
-): Anthropic.Messages.MessageCreateParams {
+): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const bulletList = inputs.sections
     .flatMap((s) => s.items.map((item) => ({ section: s.section, item })))
     .map((b, i) => `[${i}] [${b.section}] ${b.item}`)
@@ -1168,7 +1190,7 @@ export function buildSuggestBulletsRequest(
     model: "claude-opus-4-6",
     max_tokens: 4000,
     temperature: 0.3,
-    system: buildCachedPrefix(inputs.cached) as Anthropic.Messages.TextBlockParam[],
+    system: buildCachedPrefix(inputs.cached),
     messages: [{ role: "user", content: variable }],
   };
 }
@@ -1204,7 +1226,7 @@ export interface JobExtractionInputs {
 
 export function buildJobExtractionRequest(
   inputs: JobExtractionInputs,
-): Anthropic.Messages.MessageCreateParams {
+): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const variable = [
     `Source URL: ${inputs.url}`,
     `Detected ATS: ${inputs.detectedAts}`,
@@ -1264,7 +1286,7 @@ export interface ParsedResume {
 
 export function buildResumeParseRequest(
   inputs: ParseResumeInputs,
-): Anthropic.Messages.MessageCreateParams {
+): Anthropic.Messages.MessageCreateParamsNonStreaming {
   return {
     model: "claude-sonnet-4-6",
     max_tokens: 8000,
@@ -1588,7 +1610,7 @@ git commit -m "feat(prompts): claude prompt builders + eval harness"
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.30.0",
+    "@anthropic-ai/sdk": "^0.89.0",
     "@jobcopilot/db": "workspace:*",
     "@jobcopilot/prompts": "workspace:*",
     "@jobcopilot/shared": "workspace:*",
