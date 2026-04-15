@@ -15,7 +15,7 @@ export function buildResumeParseRequest(
   inputs: ParseResumeInputs,
 ): Anthropic.Messages.MessageCreateParamsNonStreaming {
   return {
-    model: "claude-sonnet-4-6",
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 8000,
     temperature: 0.1,
     system: [
