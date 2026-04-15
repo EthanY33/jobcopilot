@@ -24,7 +24,13 @@ export function AddApplicationDialog() {
         body: JSON.stringify({ url }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "extract failed");
+      if (!res.ok) {
+        const msg =
+          typeof json.error === "string"
+            ? json.error
+            : json.error?.fieldErrors?.url?.[0] ?? "extract failed";
+        throw new Error(msg);
+      }
       setOpen(false);
       setUrl("");
       router.push(`/applications/${json.applicationId}`);
