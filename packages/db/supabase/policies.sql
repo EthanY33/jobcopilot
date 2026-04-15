@@ -76,7 +76,7 @@ begin
     new.raw_user_meta_data ->> 'full_name',
     new.raw_user_meta_data ->> 'avatar_url'
   );
-  insert into public.profiles (user_id) values (new.id);
+  insert into public.profiles (user_id, updated_at) values (new.id, now());
   return new;
 end $$;
 
