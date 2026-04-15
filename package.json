@@ -12,6 +12,7 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "dotenv-cli": "^11.0.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.5"
   },
@@ -19,6 +20,10 @@
     "node": ">=20"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma"]
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
   }
 }
