@@ -1,0 +1,11 @@
+{
+  "name": "cover-letter",
+  "checks": [
+    { "kind": "length_words", "min": 180, "max": 320 },
+    { "kind": "contains_company_name", "required": true },
+    { "kind": "contains_job_title", "required": true },
+    { "kind": "banned_phrase", "phrases": ["passionate about", "dynamic team", "hit the ground running", "synergy", "game-changer", "I am writing to apply"] },
+    { "kind": "alternate_openings_count", "exact": 3 },
+    { "kind": "distinct_openings", "required": true }
+  ]
+}

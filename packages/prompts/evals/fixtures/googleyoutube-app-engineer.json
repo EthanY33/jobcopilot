@@ -1,0 +1,10 @@
+{
+  "id": "google-youtube-applications-engineer",
+  "inputs": {
+    "company": "Google",
+    "title": "Applications Engineer, YouTube",
+    "jobPostingText": "Applications Engineer, YouTube Creator Partnerships. Build generative AI tools empowering internal partner-facing users to drive success for creators. Requirements: 2+ years SWE, experience with large language models or generative AI, comfortable with full-stack web development (TypeScript, Python), strong communication skills.",
+    "variantEmphasis": ["generative AI", "multi-agent systems", "Claude API", "full-stack TypeScript"]
+  },
+  "rubric": "cover-letter"
+}
