@@ -22,6 +22,13 @@ function splitCsv(s: string): string[] {
   return s.split(",").map((x) => x.trim()).filter(Boolean);
 }
 
+function ensureHttps(v: string): string {
+  const trimmed = v.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [rolesInput, setRolesInput] = useState("");
@@ -143,12 +150,20 @@ export default function ProfilePage() {
               onChange={(e) =>
                 setProfile({ ...profile, linkedinUrl: e.target.value || null })
               }
+              onBlur={(e) => {
+                const fixed = ensureHttps(e.target.value);
+                setProfile({ ...profile, linkedinUrl: fixed || null });
+              }}
             />
           </Field>
           <Field label="GitHub URL">
             <Input
               value={profile.githubUrl ?? ""}
               onChange={(e) => setProfile({ ...profile, githubUrl: e.target.value || null })}
+              onBlur={(e) => {
+                const fixed = ensureHttps(e.target.value);
+                setProfile({ ...profile, githubUrl: fixed || null });
+              }}
             />
           </Field>
           <Field label="Portfolio URL">
@@ -157,6 +172,10 @@ export default function ProfilePage() {
               onChange={(e) =>
                 setProfile({ ...profile, portfolioUrl: e.target.value || null })
               }
+              onBlur={(e) => {
+                const fixed = ensureHttps(e.target.value);
+                setProfile({ ...profile, portfolioUrl: fixed || null });
+              }}
             />
           </Field>
         </div>
