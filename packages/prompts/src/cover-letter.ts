@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { buildCachedPrefix, type CachedPrefixInputs } from "./cache";
+import { extractJson } from "./extract-json";
 
 export interface CoverLetterInputs {
   cached: CachedPrefixInputs;
@@ -41,7 +42,7 @@ export function buildCoverLetterRequest(
     model: "claude-sonnet-4-6",
     max_tokens: 1200,
     temperature: 0.7,
-    system: buildCachedPrefix(inputs.cached) as Anthropic.Messages.TextBlockParam[],
+    system: buildCachedPrefix(inputs.cached),
     messages: [{ role: "user", content: variable }],
   };
 }
@@ -58,12 +59,8 @@ export function parseCoverLetterResponse(
   if (!Array.isArray(parsed.alternateOpenings) || parsed.alternateOpenings.length !== 3) {
     throw new Error("Expected 3 alternateOpenings");
   }
+  if (!parsed.alternateOpenings.every((s) => typeof s === "string")) {
+    throw new Error("alternateOpenings must be strings");
+  }
   return parsed;
-}
-
-function extractJson(text: string): string {
-  const firstBrace = text.indexOf("{");
-  const lastBrace = text.lastIndexOf("}");
-  if (firstBrace === -1 || lastBrace === -1) throw new Error("No JSON in response");
-  return text.slice(firstBrace, lastBrace + 1);
 }

@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { buildCachedPrefix, type CachedPrefixInputs } from "./cache";
 import type { ResumeSection } from "@jobcopilot/shared";
+import { extractJson } from "./extract-json";
 
 export interface SuggestBulletsInputs {
   cached: CachedPrefixInputs;
@@ -46,7 +47,7 @@ export function buildSuggestBulletsRequest(
     model: "claude-opus-4-6",
     max_tokens: 4000,
     temperature: 0.3,
-    system: buildCachedPrefix(inputs.cached) as Anthropic.Messages.TextBlockParam[],
+    system: buildCachedPrefix(inputs.cached),
     messages: [{ role: "user", content: variable }],
   };
 }
@@ -58,11 +59,20 @@ export function parseBulletSuggestionsResponse(
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
-  const firstBrace = text.indexOf("{");
-  const lastBrace = text.lastIndexOf("}");
-  const parsed = JSON.parse(text.slice(firstBrace, lastBrace + 1)) as {
-    suggestions: BulletSuggestion[];
-  };
+  const parsed = JSON.parse(extractJson(text)) as { suggestions: BulletSuggestion[] };
   if (!Array.isArray(parsed.suggestions)) throw new Error("Expected suggestions array");
+  if (
+    !parsed.suggestions.every(
+      (s) =>
+        s !== null &&
+        typeof s === "object" &&
+        typeof (s as BulletSuggestion).section === "string" &&
+        typeof (s as BulletSuggestion).originalBullet === "string" &&
+        typeof (s as BulletSuggestion).suggestedBullet === "string" &&
+        typeof (s as BulletSuggestion).rationale === "string",
+    )
+  ) {
+    throw new Error("parseBulletSuggestionsResponse: invalid suggestion shape");
+  }
   return parsed.suggestions;
 }

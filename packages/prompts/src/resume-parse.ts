@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { extractJson } from "./extract-json";
 
 export interface ParseResumeInputs {
   resumeBase64Pdf: string;
@@ -57,7 +58,25 @@ export function parseResumeResponse(response: Anthropic.Messages.Message): Parse
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
-  const first = text.indexOf("{");
-  const last = text.lastIndexOf("}");
-  return JSON.parse(text.slice(first, last + 1)) as ParsedResume;
+  const parsed = JSON.parse(extractJson(text)) as Partial<ParsedResume>;
+  if (typeof parsed.baseResumeText !== "string") {
+    throw new Error("parseResumeResponse: missing baseResumeText");
+  }
+  if (!Array.isArray(parsed.skills) || !parsed.skills.every((s) => typeof s === "string")) {
+    throw new Error("parseResumeResponse: skills must be string[]");
+  }
+  if (
+    !Array.isArray(parsed.sections) ||
+    !parsed.sections.every(
+      (sec) =>
+        sec !== null &&
+        typeof sec === "object" &&
+        typeof (sec as { section: unknown }).section === "string" &&
+        Array.isArray((sec as { items: unknown }).items) &&
+        (sec as { items: unknown[] }).items.every((it) => typeof it === "string"),
+    )
+  ) {
+    throw new Error("parseResumeResponse: invalid sections shape");
+  }
+  return parsed as ParsedResume;
 }

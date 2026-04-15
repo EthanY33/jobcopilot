@@ -13,7 +13,7 @@ export interface CachedPrefixInputs {
  */
 export function buildCachedPrefix(
   inputs: CachedPrefixInputs,
-): Anthropic.Messages.MessageParam["content"] {
+): Anthropic.Messages.TextBlockParam[] {
   const text = [
     "You are a career writing assistant for an engineering job seeker.",
     "",

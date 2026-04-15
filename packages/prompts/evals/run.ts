@@ -39,7 +39,12 @@ const BASELINE = {
 };
 
 async function main() {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.error("ANTHROPIC_API_KEY not set. Load it from root .env or export it before running evals.");
+    process.exit(1);
+  }
+  const client = new Anthropic({ apiKey });
   const fixtures = fs
     .readdirSync(FIXTURES_DIR)
     .filter((f) => f.endsWith(".json"))

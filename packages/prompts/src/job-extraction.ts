@@ -1,5 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedJobPosting, AtsSource } from "@jobcopilot/shared";
+import { extractedJobPostingSchema } from "@jobcopilot/shared";
+import { extractJson } from "./extract-json";
 
 export interface JobExtractionInputs {
   url: string;
@@ -46,7 +48,6 @@ export function parseJobExtractionResponse(
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
-  const first = text.indexOf("{");
-  const last = text.lastIndexOf("}");
-  return JSON.parse(text.slice(first, last + 1)) as ExtractedJobPosting;
+  const parsed = JSON.parse(extractJson(text));
+  return extractedJobPostingSchema.parse(parsed);
 }
