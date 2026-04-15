@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+export const atsSourceSchema = z.enum([
+  "greenhouse",
+  "lever",
+  "ashby",
+  "workday",
+  "icims",
+  "manual",
+]);
+
 export const resumeSectionSchema = z.object({
   section: z.string().min(1),
   items: z.array(z.string()),
@@ -11,7 +20,7 @@ export const extractedJobPostingSchema = z.object({
   location: z.string().nullable(),
   requirements: z.array(z.string()),
   description: z.string(),
-  sourceAts: z.enum(["greenhouse", "lever", "ashby", "workday", "icims", "manual"]),
+  sourceAts: atsSourceSchema,
 });
 
 export const draftCoverLetterRequestSchema = z.object({
@@ -24,7 +33,7 @@ export const draftCoverLetterResponseSchema = z.object({
   draftId: z.string().uuid(),
   version: z.number().int().positive(),
   body: z.string(),
-  alternateOpenings: z.array(z.string()).length(3),
+  alternateOpenings: z.tuple([z.string(), z.string(), z.string()]),
 });
 
 export const suggestBulletsRequestSchema = z.object({

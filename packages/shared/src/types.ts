@@ -1,3 +1,6 @@
+import type { z } from "zod";
+import type { atsSourceSchema } from "./schemas";
+
 export type ApplicationStatus =
   | "wishlist"
   | "applied"
@@ -7,7 +10,7 @@ export type ApplicationStatus =
   | "rejected"
   | "ghosted";
 
-export const APPLICATION_STATUSES: ApplicationStatus[] = [
+export const APPLICATION_STATUSES = [
   "wishlist",
   "applied",
   "phone_screen",
@@ -15,9 +18,9 @@ export const APPLICATION_STATUSES: ApplicationStatus[] = [
   "offer",
   "rejected",
   "ghosted",
-];
+] as const satisfies readonly ApplicationStatus[];
 
-export type AtsSource = "greenhouse" | "lever" | "ashby" | "workday" | "icims" | "manual";
+export type AtsSource = z.infer<typeof atsSourceSchema>;
 
 export type MatchTier = "strong_fit" | "possible_fit" | "weak_fit";
 
@@ -30,9 +33,9 @@ export interface ResumeSection {
 
 export interface Contact {
   name: string;
-  role?: string;
-  email?: string;
-  linkedin?: string;
+  role?: string | undefined;
+  email?: string | undefined;
+  linkedin?: string | undefined;
 }
 
 export interface ExtractedJobPosting {
