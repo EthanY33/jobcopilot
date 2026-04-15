@@ -18,8 +18,28 @@ export async function POST(request: Request) {
   const b64 = Buffer.from(bytes).toString("base64");
 
   const claude = getClaude();
-  const res = await claude.messages.create(buildResumeParseRequest({ resumeBase64Pdf: b64 }));
-  const parsed = parseResumeResponse(res);
+
+  let res;
+  try {
+    res = await claude.messages.create(buildResumeParseRequest({ resumeBase64Pdf: b64 }));
+  } catch (err) {
+    console.error("[parse-resume] claude api call failed:", err);
+    return NextResponse.json(
+      { error: "claude_request_failed", retryable: true },
+      { status: 502 },
+    );
+  }
+
+  let parsed;
+  try {
+    parsed = parseResumeResponse(res);
+  } catch (err) {
+    console.error("[parse-resume] response parse failed:", err);
+    return NextResponse.json(
+      { error: "parse_failed", retryable: false },
+      { status: 422 },
+    );
+  }
 
   await prisma.profile.update({
     where: { userId: data.user.id },
