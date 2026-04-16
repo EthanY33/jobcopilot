@@ -25,7 +25,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const { data } = await supabase.auth.getUser();
   if (!data.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
 
-  const body = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
+  }
   const parsed = updateApplicationRequestSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 

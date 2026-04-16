@@ -1,5 +1,3 @@
-"use client";
-
 import { KanbanBoard } from "@/components/kanban-board";
 import { AddApplicationDialog } from "@/components/add-application-dialog";
 
