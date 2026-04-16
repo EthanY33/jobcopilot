@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Contact } from "@jobcopilot/shared";
+import { CoverLetterDrafter } from "./cover-letter-drafter";
 
 // ---------------------------------------------------------------------------
 // ContactForm — all fields are strings for controlled inputs.
@@ -313,7 +314,7 @@ function TimelineTab({ application }: { application: Props["application"] }) {
 // ApplicationDetailTabs (main export)
 // ---------------------------------------------------------------------------
 
-export function ApplicationDetailTabs({ application, variants: _variants }: Props) {
+export function ApplicationDetailTabs({ application, variants }: Props) {
   return (
     <Tabs defaultValue="overview">
       <TabsList>
@@ -329,9 +330,7 @@ export function ApplicationDetailTabs({ application, variants: _variants }: Prop
       </TabsContent>
 
       <TabsContent value="cover-letter">
-        <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-          Cover letter drafter lands in a future task.
-        </div>
+        <CoverLetterDrafter application={application} variants={variants} />
       </TabsContent>
 
       <TabsContent value="resume">
