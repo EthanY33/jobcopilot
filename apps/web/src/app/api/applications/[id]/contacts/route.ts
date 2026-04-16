@@ -2,17 +2,9 @@ import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { prisma, Prisma } from "@jobcopilot/db";
 import { z } from "zod";
+import { contactSchema } from "@jobcopilot/shared";
 
-const schema = z.object({
-  contacts: z.array(
-    z.object({
-      name: z.string(),
-      role: z.string().optional(),
-      email: z.string().email().optional().or(z.literal("")),
-      linkedin: z.string().optional(),
-    }),
-  ),
-});
+const schema = z.object({ contacts: z.array(contactSchema) });
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const supabase = getServerSupabase();

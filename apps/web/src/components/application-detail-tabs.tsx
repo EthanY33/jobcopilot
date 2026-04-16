@@ -4,12 +4,31 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import type { Contact } from "@jobcopilot/shared";
 
-interface Contact {
+// ---------------------------------------------------------------------------
+// ContactForm — all fields are strings for controlled inputs.
+// _formId is a stable key; it is stripped before sending to the API.
+// ---------------------------------------------------------------------------
+
+interface ContactForm {
+  _formId: string;
   name: string;
   role: string;
   email: string;
   linkedin: string;
+}
+
+/** Strip empty strings → undefined and drop _formId to produce API-ready Contact. */
+function toContact(form: ContactForm): Contact {
+  return {
+    name: form.name,
+    role: form.role || undefined,
+    email: form.email || undefined,
+    linkedin: form.linkedin || undefined,
+  };
 }
 
 interface Props {
@@ -28,10 +47,11 @@ function OverviewTab({ application }: { application: Props["application"] }) {
   const [followUpAt, setFollowUpAt] = useState<string>(
     application.followUpAt ? new Date(application.followUpAt).toISOString().slice(0, 10) : "",
   );
-  const [contacts, setContacts] = useState<Contact[]>(() => {
+  const [contacts, setContacts] = useState<ContactForm[]>(() => {
     const raw: unknown = application.contacts;
     if (!Array.isArray(raw)) return [];
     return (raw as Contact[]).map((c) => ({
+      _formId: crypto.randomUUID(),
       name: c.name ?? "",
       role: c.role ?? "",
       email: c.email ?? "",
@@ -49,21 +69,22 @@ function OverviewTab({ application }: { application: Props["application"] }) {
     setSaveError(null);
     setSaved(false);
     try {
-      const patchRes = await fetch(`/api/applications/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          notes,
-          followUpAt: followUpAt !== "" ? followUpAt : null,
+      const [patchRes, contactsRes] = await Promise.all([
+        fetch(`/api/applications/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            notes,
+            followUpAt: followUpAt !== "" ? new Date(followUpAt).toISOString() : null,
+          }),
         }),
-      });
+        fetch(`/api/applications/${id}/contacts`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contacts: contacts.map(toContact) }),
+        }),
+      ]);
       if (!patchRes.ok) throw new Error("Failed to save notes/follow-up");
-
-      const contactsRes = await fetch(`/api/applications/${id}/contacts`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contacts }),
-      });
       if (!contactsRes.ok) throw new Error("Failed to save contacts");
 
       setSaved(true);
@@ -75,14 +96,20 @@ function OverviewTab({ application }: { application: Props["application"] }) {
   }
 
   function addContact() {
-    setContacts((prev) => [...prev, { name: "", role: "", email: "", linkedin: "" }]);
+    setSaved(false);
+    setContacts((prev) => [
+      ...prev,
+      { _formId: crypto.randomUUID(), name: "", role: "", email: "", linkedin: "" },
+    ]);
   }
 
   function removeContact(index: number) {
+    setSaved(false);
     setContacts((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function updateContact(index: number, field: keyof Contact, value: string) {
+  function updateContact(index: number, field: keyof Omit<ContactForm, "_formId">, value: string) {
+    setSaved(false);
     setContacts((prev) =>
       prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)),
     );
@@ -122,20 +149,20 @@ function OverviewTab({ application }: { application: Props["application"] }) {
         <h2 className="mb-2 text-sm font-semibold text-foreground">Notes</h2>
         <Textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => { setNotes(e.target.value); setSaved(false); }}
           placeholder="Add notes about this application…"
           className="min-h-[120px]"
+          maxLength={5000}
         />
       </section>
 
       {/* Follow-up date */}
       <section className="rounded-lg border border-border bg-card p-4">
         <h2 className="mb-2 text-sm font-semibold text-foreground">Follow-up Date</h2>
-        <input
+        <Input
           type="date"
           value={followUpAt}
-          onChange={(e) => setFollowUpAt(e.target.value)}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          onChange={(e) => { setFollowUpAt(e.target.value); setSaved(false); }}
         />
       </section>
 
@@ -152,7 +179,7 @@ function OverviewTab({ application }: { application: Props["application"] }) {
         )}
         <div className="space-y-4">
           {contacts.map((contact, i) => (
-            <div key={i} className="rounded-md border border-border p-3">
+            <div key={contact._formId} className="rounded-md border border-border p-3">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">
                   Contact {i + 1}
@@ -167,43 +194,47 @@ function OverviewTab({ application }: { application: Props["application"] }) {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Name</label>
-                  <input
+                  <Label className="mb-1 block text-xs text-muted-foreground">Name</Label>
+                  <Input
                     type="text"
                     value={contact.name}
                     onChange={(e) => updateContact(i, "name", e.target.value)}
                     placeholder="Jane Doe"
-                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    maxLength={200}
+                    className="h-8 px-2 py-1"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Role</label>
-                  <input
+                  <Label className="mb-1 block text-xs text-muted-foreground">Role</Label>
+                  <Input
                     type="text"
                     value={contact.role}
                     onChange={(e) => updateContact(i, "role", e.target.value)}
                     placeholder="Recruiter"
-                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    maxLength={200}
+                    className="h-8 px-2 py-1"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Email</label>
-                  <input
+                  <Label className="mb-1 block text-xs text-muted-foreground">Email</Label>
+                  <Input
                     type="email"
                     value={contact.email}
                     onChange={(e) => updateContact(i, "email", e.target.value)}
                     placeholder="jane@company.com"
-                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    maxLength={200}
+                    className="h-8 px-2 py-1"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">LinkedIn</label>
-                  <input
+                  <Label className="mb-1 block text-xs text-muted-foreground">LinkedIn</Label>
+                  <Input
                     type="text"
                     value={contact.linkedin}
                     onChange={(e) => updateContact(i, "linkedin", e.target.value)}
                     placeholder="linkedin.com/in/jane"
-                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    maxLength={200}
+                    className="h-8 px-2 py-1"
                   />
                 </div>
               </div>
