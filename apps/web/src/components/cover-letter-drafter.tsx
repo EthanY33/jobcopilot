@@ -25,14 +25,16 @@ interface Props {
 }
 
 export function CoverLetterDrafter({ application, variants }: Props) {
-  const letters = application.drafts.filter((d) => d.kind === "cover_letter");
-  const latest = letters[0] ?? null;
+  const [localLetters, setLocalLetters] = useState<(Draft & { kind: string })[]>(() =>
+    application.drafts.filter((d) => d.kind === "cover_letter"),
+  );
+  const latest = localLetters[0] ?? null;
 
   const [variantId, setVariantId] = useState<string>(
     application.resumeVariantId ?? variants[0]?.id ?? "",
   );
   const [override, setOverride] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"draft" | "save" | null>(null);
   const [currentDraft, setCurrentDraft] = useState<Draft | null>(latest);
   const [editedBody, setEditedBody] = useState(latest?.userEdited || latest?.aiDraft || "");
   const [alternates, setAlternates] = useState<string[]>([]);
@@ -44,7 +46,7 @@ export function CoverLetterDrafter({ application, variants }: Props) {
 
   async function draft() {
     setError(null);
-    setBusy(true);
+    setBusyAction("draft");
     try {
       const r = await fetch(`/api/applications/${application.id}/draft-cover-letter`, {
         method: "POST",
@@ -59,28 +61,32 @@ export function CoverLetterDrafter({ application, variants }: Props) {
         error?: unknown;
       };
       if (!r.ok) throw new Error(String(json.error ?? "draft failed"));
-      setCurrentDraft({
+      const newDraft: Draft & { kind: string } = {
         id: json.draftId!,
         version: json.version!,
         aiDraft: json.body!,
         userEdited: "",
         finalized: false,
         createdAt: new Date().toISOString(),
-      });
+        kind: "cover_letter",
+      };
+      setCurrentDraft(newDraft);
+      setLocalLetters((prev) => [newDraft, ...prev]);
       setEditedBody(json.body!);
       setAlternates(json.alternateOpenings ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "draft failed");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function save(finalize: boolean) {
     if (!currentDraft) return;
-    setBusy(true);
+    setError(null);
+    setBusyAction("save");
     try {
-      await fetch(`/api/applications/${application.id}/draft-cover-letter`, {
+      const r = await fetch(`/api/applications/${application.id}/draft-cover-letter`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,9 +95,15 @@ export function CoverLetterDrafter({ application, variants }: Props) {
           finalized: finalize,
         }),
       });
+      if (!r.ok) {
+        const json = await r.json().catch(() => ({})) as Record<string, unknown>;
+        throw new Error(String(json.error ?? "save failed"));
+      }
       setCurrentDraft({ ...currentDraft, userEdited: editedBody, finalized: finalize });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "save failed");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -116,11 +128,11 @@ export function CoverLetterDrafter({ application, variants }: Props) {
           placeholder={currentDraft ? "" : "Click Draft to generate a cover letter"}
         />
         <div className="flex gap-2">
-          <Button onClick={() => void save(false)} disabled={busy || !currentDraft} variant="outline">
-            Save edits
+          <Button onClick={() => void save(false)} disabled={busyAction !== null || !currentDraft} variant="outline">
+            {busyAction === "save" ? "Saving…" : "Save edits"}
           </Button>
-          <Button onClick={() => void save(true)} disabled={busy || !currentDraft}>
-            Finalize
+          <Button onClick={() => void save(true)} disabled={busyAction !== null || !currentDraft}>
+            {busyAction === "save" ? "Saving…" : "Finalize"}
           </Button>
         </div>
       </section>
@@ -150,8 +162,8 @@ export function CoverLetterDrafter({ application, variants }: Props) {
             placeholder="e.g., emphasize Claude API work"
           />
         </div>
-        <Button className="w-full" onClick={() => void draft()} disabled={busy || !variantId}>
-          {busy ? "Drafting..." : letters.length ? "Regenerate" : "Draft"}
+        <Button className="w-full" onClick={() => void draft()} disabled={busyAction !== null || !variantId}>
+          {busyAction === "draft" ? "Drafting..." : localLetters.length ? "Regenerate" : "Draft"}
         </Button>
 
         {alternates.length > 0 && (
@@ -176,10 +188,10 @@ export function CoverLetterDrafter({ application, variants }: Props) {
           </div>
         )}
 
-        {letters.length > 1 && (
+        {localLetters.length > 1 && (
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Versions</div>
-            {letters.map((d) => (
+            {localLetters.map((d) => (
               <button
                 key={d.id}
                 className="block w-full rounded-md border border-border bg-background p-2 text-left text-xs hover:bg-secondary"

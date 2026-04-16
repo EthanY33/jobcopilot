@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { prisma } from "@jobcopilot/db";
+import { prisma, Prisma } from "@jobcopilot/db";
 import { getClaude } from "@/lib/claude";
 import {
   buildCoverLetterRequest,
@@ -53,48 +53,67 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   };
 
   const claude = getClaude();
-  const res = await claude.messages.create(
-    buildCoverLetterRequest({
-      cached,
-      jobPostingText:
-        app.jobPosting.description + "\n\n" + app.jobPosting.requirements.join("\n"),
-      company: app.jobPosting.company,
-      title: app.jobPosting.title,
-      variantEmphasis: variant.emphasisKeywords,
-      ...(parsed.data.override !== undefined ? { override: parsed.data.override } : {}),
-    }),
-  );
-  const output = parseCoverLetterResponse(res);
+  let output: ReturnType<typeof parseCoverLetterResponse>;
+  try {
+    const res = await claude.messages.create(
+      buildCoverLetterRequest({
+        cached,
+        jobPostingText:
+          app.jobPosting.description + "\n\n" + app.jobPosting.requirements.join("\n"),
+        company: app.jobPosting.company,
+        title: app.jobPosting.title,
+        variantEmphasis: variant.emphasisKeywords,
+        ...(parsed.data.override !== undefined ? { override: parsed.data.override } : {}),
+      }),
+    );
+    output = parseCoverLetterResponse(res);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "AI generation failed";
+    const isParseError = msg.includes("Invalid") || msg.includes("Expected");
+    console.error("[draft-cover-letter] AI error:", e);
+    return NextResponse.json({ error: msg }, { status: isParseError ? 422 : 502 });
+  }
 
   const priorMax = await prisma.draftedContent.aggregate({
     where: { applicationId: app.id, kind: "cover_letter" },
     _max: { version: true },
   });
   const nextVersion = (priorMax._max.version ?? 0) + 1;
-  const priorLatest = await prisma.draftedContent.findFirst({
-    where: {
-      applicationId: app.id,
-      kind: "cover_letter",
-      version: priorMax._max.version ?? 0,
-    },
-  });
+  const priorLatest =
+    priorMax._max.version != null
+      ? await prisma.draftedContent.findFirst({
+          where: {
+            applicationId: app.id,
+            kind: "cover_letter",
+            version: priorMax._max.version,
+          },
+        })
+      : null;
 
-  const draft = await prisma.draftedContent.create({
-    data: {
-      applicationId: app.id,
-      kind: "cover_letter",
-      version: nextVersion,
-      parentDraftId: priorLatest?.id ?? null,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      originalPromptInputs: {
-        resumeVariantId: variant.id,
-        override: parsed.data.override ?? null,
-      } as any,
-      aiDraft: output.body,
-      userEdited: "",
-      finalized: false,
-    },
-  });
+  let draft: Awaited<ReturnType<typeof prisma.draftedContent.create>>;
+  try {
+    draft = await prisma.draftedContent.create({
+      data: {
+        applicationId: app.id,
+        kind: "cover_letter",
+        version: nextVersion,
+        parentDraftId: priorLatest?.id ?? null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        originalPromptInputs: {
+          resumeVariantId: variant.id,
+          override: parsed.data.override ?? null,
+        } as any,
+        aiDraft: output.body,
+        userEdited: "",
+        finalized: false,
+      },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return NextResponse.json({ error: "version conflict, please retry" }, { status: 409 });
+    }
+    throw e;
+  }
 
   await prisma.application.update({
     where: { id: app.id },
