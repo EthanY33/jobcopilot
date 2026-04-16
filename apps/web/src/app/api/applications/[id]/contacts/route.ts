@@ -1,0 +1,37 @@
+import { NextResponse } from "next/server";
+import { getServerSupabase } from "@/lib/supabase/server";
+import { prisma, Prisma } from "@jobcopilot/db";
+import { z } from "zod";
+
+const schema = z.object({
+  contacts: z.array(
+    z.object({
+      name: z.string(),
+      role: z.string().optional(),
+      email: z.string().email().optional().or(z.literal("")),
+      linkedin: z.string().optional(),
+    }),
+  ),
+});
+
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  const supabase = getServerSupabase();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  const app = await prisma.application.update({
+    where: { id: params.id, userId: data.user.id },
+    data: { contacts: parsed.data.contacts as unknown as Prisma.InputJsonValue },
+  });
+  return NextResponse.json(app);
+}
