@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Contact } from "@jobcopilot/shared";
 import { CoverLetterDrafter } from "./cover-letter-drafter";
+import { BulletSuggester } from "./bullet-suggester";
 
 // ---------------------------------------------------------------------------
 // ContactForm — all fields are strings for controlled inputs.
@@ -334,9 +335,7 @@ export function ApplicationDetailTabs({ application, variants }: Props) {
       </TabsContent>
 
       <TabsContent value="resume">
-        <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-          Resume bullet suggester lands in a future task.
-        </div>
+        <BulletSuggester application={application} variants={variants} />
       </TabsContent>
 
       <TabsContent value="answers">
