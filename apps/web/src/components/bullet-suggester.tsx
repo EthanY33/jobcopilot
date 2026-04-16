@@ -3,13 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-
-interface Suggestion {
-  section: string;
-  originalBullet: string;
-  suggestedBullet: string;
-  rationale: string;
-}
+import type { BulletSuggestion } from "@jobcopilot/prompts";
 
 interface Props {
   application: { id: string; resumeVariantId: string | null };
@@ -20,7 +14,7 @@ export function BulletSuggester({ application, variants }: Props) {
   const [variantId, setVariantId] = useState<string>(
     application.resumeVariantId ?? variants[0]?.id ?? "",
   );
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<BulletSuggestion[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,12 +29,20 @@ export function BulletSuggester({ application, variants }: Props) {
       });
       const json = await r.json();
       if (!r.ok) throw new Error(String((json as Record<string, unknown>).error ?? "failed"));
-      setSuggestions((json as { suggestions: Suggestion[] }).suggestions);
+      setSuggestions((json as { suggestions: BulletSuggestion[] }).suggestions);
     } catch (e) {
       setError(e instanceof Error ? e.message : "failed");
     } finally {
       setBusy(false);
     }
+  }
+
+  if (variants.length === 0) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
+        Create a resume variant first to use the bullet suggester.
+      </div>
+    );
   }
 
   return (
@@ -69,6 +71,12 @@ export function BulletSuggester({ application, variants }: Props) {
         </div>
         {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
       </section>
+
+      {busy && (
+        <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+          Generating suggestions…
+        </div>
+      )}
 
       {suggestions.length > 0 && (
         <section className="space-y-3">

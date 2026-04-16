@@ -92,8 +92,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         })
       : null;
 
+  let draft: Awaited<ReturnType<typeof prisma.draftedContent.create>>;
   try {
-    await prisma.draftedContent.create({
+    draft = await prisma.draftedContent.create({
       data: {
         applicationId: app.id,
         kind: "resume_bullets",
@@ -115,5 +116,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     throw e;
   }
 
-  return NextResponse.json({ suggestions });
+  await prisma.application.update({
+    where: { id: app.id },
+    data: { resumeVariantId: variant.id },
+  });
+
+  return NextResponse.json({ draftId: draft.id, version: draft.version, suggestions });
 }
