@@ -60,6 +60,7 @@ model ResumeVariant {
 
   applications Application[]
 
+  @@unique([userId, name])
   @@index([userId])
   @@map("resume_variants")
   @@schema("public")
