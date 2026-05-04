@@ -4662,15 +4662,160 @@ git commit -m "feat(web): resume variants crud page"
 
 ---
 
-## Task 16: E2E test — the ship criterion
+## Task 16: E2E test — the ship criterion (REVISED 2026-05-04)
+
+**Why this section was rewritten:** The original Task 16 used Playwright's `context.route()` to intercept `api.anthropic.com` and the outbound scrape. That doesn't work — `context.route()` only intercepts requests issued from the browser context. Both the Anthropic SDK call and the scraper's `fetch()` happen server-side in Next.js route handlers (Node runtime), where Playwright's route patterns never fire. The revised task mocks at the **SDK `baseURL`** and the **scrape URL** layers via in-app routes that exist only in non-production builds. Production code remains untouched apart from one optional config read.
 
 **Files:**
-- Create: `apps/web/tests/e2e/google-referral.spec.ts`
-- Create: `apps/web/tests/fixtures/google-posting.html` (static fixture for deterministic test)
+- Modify: `apps/web/src/lib/claude.ts` — read optional `ANTHROPIC_BASE_URL` env var
+- Modify: `apps/web/playwright.config.ts` — add auth-setup project + `webServer.env`
+- Modify: `.gitignore` — add `playwright/.auth/`
+- Create: `apps/web/src/app/api/_test/anthropic-mock/v1/messages/route.ts` — in-app Anthropic mock, gated to non-prod
+- Create: `apps/web/src/app/api/_test/google-fixture/route.ts` — serves the static job-posting fixture HTML over HTTP so the scraper can pull it
+- Create: `apps/web/tests/fixtures/google-posting.html` — the fixture HTML
+- Create: `apps/web/tests/e2e/auth.setup.ts` — Supabase admin magic-link → seeded `storageState`
+- Create: `apps/web/tests/e2e/google-referral.spec.ts` — the ship-criterion test
 
-- [ ] **Step 1: Write fixture**
+- [ ] **Step 1: Plumb `ANTHROPIC_BASE_URL` through the Claude singleton**
+
+Replace `apps/web/src/lib/claude.ts` with:
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+
+let client: Anthropic | null = null;
+
+export function getClaude(): Anthropic {
+  if (!client) {
+    client = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY!,
+      baseURL: process.env.ANTHROPIC_BASE_URL,
+    });
+  }
+  return client;
+}
+```
+
+`baseURL` is `undefined` in production → SDK falls back to its default (`https://api.anthropic.com`). No production behavior change.
+
+```bash
+pnpm -F @jobcopilot/web typecheck
+```
+Expected: PASS.
+
+- [ ] **Step 2: Create the in-app Anthropic mock route**
+
+Create `apps/web/src/app/api/_test/anthropic-mock/v1/messages/route.ts`:
+
+```typescript
+import { NextResponse } from "next/server";
+
+interface AnthropicContentBlock {
+  type: string;
+  text?: string;
+}
+interface AnthropicMessage {
+  role: "user" | "assistant";
+  content: string | AnthropicContentBlock[];
+}
+
+function flattenContent(content: AnthropicMessage["content"]): string {
+  if (typeof content === "string") return content;
+  return content
+    .map((b) => (b.type === "text" && typeof b.text === "string" ? b.text : ""))
+    .join("\n");
+}
+
+function fingerprint(messages: AnthropicMessage[], system: unknown): string {
+  const userText = messages
+    .filter((m) => m.role === "user")
+    .map((m) => flattenContent(m.content))
+    .join("\n");
+  const sysText = typeof system === "string" ? system : JSON.stringify(system ?? "");
+  return userText + "\n" + sysText;
+}
+
+export async function POST(req: Request) {
+  if (process.env.NODE_ENV === "production") {
+    return new NextResponse("not found", { status: 404 });
+  }
+
+  const body = (await req.json()) as {
+    messages?: AnthropicMessage[];
+    system?: unknown;
+  };
+  const fp = fingerprint(body.messages ?? [], body.system);
+
+  let text = "{}";
+  if (/extract.*job posting/i.test(fp)) {
+    text = JSON.stringify({
+      company: "Google",
+      title: "Applications Engineer, YouTube Creator Partnerships",
+      location: "New York, NY",
+      requirements: [
+        "Bachelor's degree in Computer Science or equivalent experience",
+        "2+ years of experience in software engineering",
+        "Experience with large language models or generative AI",
+      ],
+      description:
+        "Build generative AI tools empowering internal partner-facing users to drive success for creators on YouTube.",
+      sourceAts: "manual",
+    });
+  } else if (/cover letter/i.test(fp)) {
+    text = JSON.stringify({
+      body:
+        "Dear Google team,\n\nI'm writing about the Applications Engineer role on YouTube " +
+        "Creator Partnerships. I'm a December 2026 CS grad at NJIT shipping LLM tooling and " +
+        "a Steam indie game in parallel — exactly the work your charter describes. Looking " +
+        "forward to talking.\n\nEthan",
+      alternateOpenings: [
+        "I'm a December 2026 CS grad shipping LLM tooling and a Steam indie game — writing about the Applications Engineer role on YouTube Creator Partnerships.",
+        "Your team builds gen-AI tools for internal partners — that's the shape of work I've already chosen.",
+        "Hi — writing about the Applications Engineer role on YouTube Creator Partnerships. The charter overlaps directly with what I've built over the last 18 months.",
+      ],
+    });
+  } else if (/suggest.*bullets/i.test(fp)) {
+    text = JSON.stringify({
+      suggestions: [
+        {
+          original: "Built TideWane indie game",
+          suggested:
+            "Shipped TideWane to Steam — full-stack TypeScript, Web Audio synthesis, Godot WebView IPC",
+          rationale:
+            "Adds platform + tech-stack specificity matching the JD's full-stack focus",
+        },
+      ],
+    });
+  } else if (/parse.*resume|extract.*resume/i.test(fp)) {
+    text = JSON.stringify({
+      baseResumeText: "Ethan Yucetepe\nNJIT CS, December 2026\nExperience...",
+      skills: ["TypeScript", "React", "Node.js", "Anthropic SDK"],
+      sections: [
+        {
+          section: "Experience",
+          items: ["Founded goneIdle and shipped TideWane to Steam"],
+        },
+      ],
+    });
+  }
+
+  return NextResponse.json({
+    id: "msg_test",
+    type: "message",
+    role: "assistant",
+    model: "claude-sonnet-4-6",
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    content: [{ type: "text", text }],
+    usage: { input_tokens: 500, output_tokens: 200 },
+  });
+}
+```
+
+- [ ] **Step 3: Create the static fixture + fixture-serve endpoint**
 
 Create `apps/web/tests/fixtures/google-posting.html`:
+
 ```html
 <!DOCTYPE html>
 <html>
@@ -4693,109 +4838,171 @@ Create `apps/web/tests/fixtures/google-posting.html`:
 </html>
 ```
 
-- [ ] **Step 2: Configure Playwright to stub the Claude + scraper layer**
+Create `apps/web/src/app/api/_test/google-fixture/route.ts`:
 
-The plain E2E test will drive real UI but the Claude and external-fetch calls are costly + non-deterministic. Stub them.
-
-Create `apps/web/tests/e2e/google-referral.spec.ts`:
 ```typescript
-import { test, expect } from "@playwright/test";
+import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 
-const fixtureHtml = fs.readFileSync(
-  path.join(__dirname, "..", "fixtures", "google-posting.html"),
-  "utf8",
-);
+export async function GET() {
+  if (process.env.NODE_ENV === "production") {
+    return new NextResponse("not found", { status: 404 });
+  }
+  const fixturePath = path.join(
+    process.cwd(),
+    "tests",
+    "fixtures",
+    "google-posting.html",
+  );
+  const html = fs.readFileSync(fixturePath, "utf8");
+  return new NextResponse(html, {
+    status: 200,
+    headers: { "content-type": "text/html" },
+  });
+}
+```
 
-/**
- * Ship criterion E2E: fully drive the Google YouTube referral through the app.
- * Claude calls and scraping are intercepted so the test is fast + deterministic.
- */
-test("ship criterion: apply to Google YouTube referral end-to-end", async ({ page, context }) => {
-  // Stub outbound scrape of the job URL
-  await context.route("https://careers.google.com/jobs/results/test-referral/", async (route) => {
-    await route.fulfill({ status: 200, contentType: "text/html", body: fixtureHtml });
+The scraper's server-side `fetch()` calls into this endpoint at `http://localhost:3000/api/_test/google-fixture`, gets the HTML, hands it to the Claude extractor — whose call lands at the Anthropic mock from Step 2.
+
+- [ ] **Step 4: Write the Supabase auth setup**
+
+Ensure the directory exists, then create `apps/web/tests/e2e/auth.setup.ts`:
+
+```typescript
+import { test as setup, expect } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+import path from "node:path";
+import fs from "node:fs";
+
+const authFile = path.join("playwright", ".auth", "user.json");
+
+setup("authenticate", async ({ page }) => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    throw new Error(
+      "auth.setup.ts requires NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in env",
+    );
+  }
+
+  const admin = createClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Stub Claude API extraction
-  await context.route(/api\.anthropic\.com\/v1\/messages/, async (route) => {
-    const req = route.request();
-    const body = req.postDataJSON() as { messages?: Array<{ content: string }> };
-    const userMessage = body.messages?.[0]?.content ?? "";
-    let responseText: string;
-    if (userMessage.includes("Extract the job posting")) {
-      responseText = JSON.stringify({
-        company: "Google",
-        title: "Applications Engineer, YouTube Creator Partnerships",
-        location: "New York, NY",
-        requirements: [
-          "Bachelor's degree in Computer Science or equivalent experience",
-          "2+ years of experience in software engineering",
-          "Experience with large language models or generative AI",
-        ],
-        description:
-          "Build generative AI tools empowering internal partner-facing users to drive success for creators on YouTube.",
-        sourceAts: "manual",
-      });
-    } else if (userMessage.includes("Write a 220-280 word cover letter")) {
-      responseText = JSON.stringify({
-        body:
-          "Dear Google team,\n\nI noticed your Applications Engineer role on the YouTube Creator Partnerships team and wanted to share why I'd be a strong fit. At NJIT I'm finishing a CS degree in December 2026 while running goneIdle, an indie game studio where I ship TideWane to Steam — hands-on full-stack work from canvas rendering engines to Web Audio synthesis. Alongside that I built OpenClaw, a Python trading system using multi-agent Claude orchestration, and PrivacyPulse, a Chrome extension that shipped to production. Each of those projects is a direct match for the role: LLM tooling, internal-product focus, and the craft of turning ambiguous user problems into reliable automation.\n\nYour team builds generative AI tools for internal partner-facing users. That's where I've chosen to spend my last eighteen months: applying Anthropic's SDK, multi-agent orchestration, and careful prompt engineering to real systems — not demos. The Applications Engineer framing resonates because the gap between a working Claude prompt and a trustworthy internal tool is mostly engineering discipline, not model choice.\n\nI'd like to carry that into a team that cares about creators. Thanks for considering me — looking forward to talking further.\n\nEthan",
-        alternateOpenings: [
-          "I'm a December 2026 CS grad at NJIT shipping a Steam indie game and building Claude-powered tools — writing because the Applications Engineer role on YouTube Creator Partnerships matches that work exactly.",
-          "The Applications Engineer role on YouTube Creator Partnerships is one of the few JDs that matches the shape of work I've already chosen to do.",
-          "Hi — I'm writing about the Applications Engineer role on the YouTube Creator Partnerships team. Your team's charter around internal gen-AI tooling lines up directly with what I've been building over the last eighteen months.",
-        ],
-      });
-    } else {
-      responseText = "{}";
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        id: "msg_test",
-        type: "message",
-        role: "assistant",
-        model: "claude-sonnet-4-6",
-        stop_reason: "end_turn",
-        content: [{ type: "text", text: responseText }],
-        usage: { input_tokens: 500, output_tokens: 200 },
-      }),
+  const testEmail = "e2e@jobcopilot.test";
+  const { data: existing } = await admin.auth.admin.listUsers();
+  let userId = existing.users.find((u) => u.email === testEmail)?.id;
+  if (!userId) {
+    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+      email: testEmail,
+      email_confirm: true,
+      password: "test-" + Math.random().toString(36).slice(2),
     });
-  });
+    if (createErr || !created.user) throw createErr ?? new Error("createUser failed");
+    userId = created.user.id;
+  }
 
-  await page.goto("/login");
-  // This test assumes the engineer has seeded a logged-in session via
-  // `supabase.auth.admin.createUser` + cookie injection in a `test.beforeEach`.
-  // For brevity: skip auth by setting a signed-in cookie fixture (see test infra note below).
+  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email: testEmail,
+  });
+  if (linkErr) throw linkErr;
+  const actionLink = link?.properties?.action_link;
+  if (!actionLink) throw new Error("generateLink returned no action_link");
+
+  await page.goto(actionLink);
+  await page.waitForURL(/\/(dashboard|tracker|profile)/, { timeout: 30_000 });
+  await expect(page.locator("body")).not.toContainText(/error/i);
+
+  fs.mkdirSync(path.dirname(authFile), { recursive: true });
+  await page.context().storageState({ path: authFile });
+});
+```
+
+- [ ] **Step 5: Update Playwright config + `.gitignore`**
+
+Replace `apps/web/playwright.config.ts`:
+
+```typescript
+import { defineConfig, devices } from "@playwright/test";
+
+export default defineConfig({
+  testDir: "./tests/e2e",
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  reporter: "list",
+  use: {
+    baseURL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+    trace: "on-first-retry",
+  },
+  projects: [
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/user.json",
+      },
+      dependencies: ["setup"],
+    },
+  ],
+  webServer: {
+    command: "pnpm dev",
+    url: "http://localhost:3000",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+    env: {
+      ANTHROPIC_API_KEY: "sk-test-not-real",
+      ANTHROPIC_BASE_URL: "http://localhost:3000/api/_test/anthropic-mock",
+    },
+  },
+});
+```
+
+Append to root `.gitignore`:
+
+```
+playwright/.auth/
+```
+
+- [ ] **Step 6: Write the ship-criterion E2E spec**
+
+Create `apps/web/tests/e2e/google-referral.spec.ts`:
+
+```typescript
+import { test, expect } from "@playwright/test";
+
+test("ship criterion: apply to Google YouTube referral end-to-end", async ({ page }) => {
+  // The dev server has ANTHROPIC_BASE_URL pointed at the in-app mock
+  // (see playwright.config.ts → webServer.env). The scraper hits the
+  // in-app fixture endpoint instead of careers.google.com.
+  const fixtureUrl = "http://localhost:3000/api/_test/google-fixture";
 
   await page.goto("/tracker");
-  await page.getByRole("button", { name: /Add application/ }).click();
-  await page.getByLabel("Job posting URL").fill("https://careers.google.com/jobs/results/test-referral/");
-  await page.getByRole("button", { name: /Extract/ }).click();
+  await page.getByRole("button", { name: /Add application/i }).click();
+  await page.getByLabel(/Job posting URL/i).fill(fixtureUrl);
+  await page.getByRole("button", { name: /^Extract$/i }).click();
 
-  // Should land on detail page
-  await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { name: /Applications Engineer/ })).toBeVisible();
+  await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/, { timeout: 30_000 });
+  await expect(
+    page.getByRole("heading", { name: /Applications Engineer/i }),
+  ).toBeVisible();
 
   // Cover letter tab
-  await page.getByRole("tab", { name: /Cover letter/ }).click();
-  await page.getByRole("button", { name: /^Draft$/ }).click();
-  await expect(page.getByText(/Dear Google team/)).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("tab", { name: /Cover letter/i }).click();
+  await page.getByRole("button", { name: /^Draft$/i }).click();
+  await expect(page.getByText(/Dear Google team/i)).toBeVisible({
+    timeout: 30_000,
+  });
 
-  // Finalize
-  await page.getByRole("button", { name: /Finalize/ }).click();
-  await expect(page.getByText(/Finalized/)).toBeVisible();
+  // Finalize the cover letter
+  await page.getByRole("button", { name: /Finalize/i }).click();
+  await expect(page.getByText(/Finalized/i)).toBeVisible();
 
-  // Move to Applied
-  await page.goto("/tracker");
-  const card = page.getByText(/Applications Engineer/).first();
-  await expect(card).toBeVisible();
-  // Drag-drop testing is fiddly — directly PATCH status instead in a minimal way.
-  // Real UX is drag, but the ship criterion is the application flow, not dnd.
+  // Move card to Applied via API (DnD is fragile; the ship criterion is the
+  // application-flow path, not the kanban interaction)
   await page.evaluate(async () => {
     const apps = await fetch("/api/applications").then((r) => r.json());
     const target = apps[0];
@@ -4805,78 +5012,32 @@ test("ship criterion: apply to Google YouTube referral end-to-end", async ({ pag
       body: JSON.stringify({ status: "applied" }),
     });
   });
-  await page.reload();
-  await expect(page.locator("#applied").getByText(/Applications Engineer/)).toBeVisible();
+
+  await page.goto("/tracker");
+  await expect(
+    page.locator("#applied").getByText(/Applications Engineer/i),
+  ).toBeVisible();
 });
 ```
 
-- [ ] **Step 3: Test infra note — auth fixture**
-
-The test assumes a pre-authed session. Create `apps/web/tests/e2e/auth.setup.ts`:
-```typescript
-import { test as setup } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
-
-const authFile = "playwright/.auth/user.json";
-
-setup("authenticate", async ({ page }) => {
-  const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
-  const testEmail = "e2e@jobcopilot.test";
-  const { data: existing } = await admin.auth.admin.listUsers();
-  let userId = existing.users.find((u) => u.email === testEmail)?.id;
-  if (!userId) {
-    const { data: created } = await admin.auth.admin.createUser({
-      email: testEmail,
-      email_confirm: true,
-      password: "test-" + Math.random().toString(36).slice(2),
-    });
-    userId = created.user!.id;
-  }
-
-  // Sign in via magic-link generated server-side, then paste the token into the browser
-  const { data: link } = await admin.auth.admin.generateLink({
-    type: "magiclink",
-    email: testEmail,
-  });
-  await page.goto(link.properties!.action_link!);
-  await page.waitForURL(/\/dashboard/);
-  await page.context().storageState({ path: authFile });
-});
-```
-
-Update `playwright.config.ts` `projects` array:
-```typescript
-projects: [
-  { name: "setup", testMatch: /auth\.setup\.ts/ },
-  {
-    name: "chromium",
-    use: { ...devices["Desktop Chrome"], storageState: "playwright/.auth/user.json" },
-    dependencies: ["setup"],
-  },
-],
-```
-
-Add to `.gitignore`:
-```
-playwright/.auth/
-```
-
-- [ ] **Step 4: Run E2E**
+- [ ] **Step 7: Run the E2E**
 
 ```bash
 pnpm -F @jobcopilot/web test:e2e
 ```
-Expected: both `auth.setup.ts` and `google-referral.spec.ts` pass.
+Expected: `auth.setup.ts` runs (creates the seeded test user + saved storage state), then `google-referral.spec.ts` passes. Total runtime ~30-60s.
 
-- [ ] **Step 5: Commit**
+If something fails:
+- "Stub didn't fire / cover letter never appears" → check the dev-server startup logs for `ANTHROPIC_BASE_URL=http://localhost:3000/api/_test/anthropic-mock`. If absent, `webServer.env` isn't reaching the dev process — likely a Playwright version mismatch.
+- "Scraper hit careers.google.com" → confirm the test fills the fixture URL (`/api/_test/google-fixture`), not a real Google URL.
+- "auth.setup.ts hangs" → verify `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL` are set in `apps/web/.env.local`.
+- "404 from /api/_test/anthropic-mock/v1/messages" → confirm the route file path; Anthropic SDK appends `/v1/messages` to `baseURL`, so the mock must live at exactly `app/api/_test/anthropic-mock/v1/messages/route.ts`.
+
+- [ ] **Step 8: Commit**
 
 ```bash
-git add apps/web
-git commit -m "test(e2e): ship-criterion test for google referral application flow"
+git add apps/web .gitignore
+git commit -m "test(e2e): ship-criterion test via in-app anthropic + scrape mocks"
 ```
 
 ---
