@@ -10,5 +10,6 @@ dist/
 .DS_Store
 .playwright-cache/
 playwright-report/
+**/playwright/.auth/
 test-results/
 coverage/
