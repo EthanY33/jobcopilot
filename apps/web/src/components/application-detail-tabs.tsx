@@ -330,11 +330,11 @@ export function ApplicationDetailTabs({ application, variants }: Props) {
         <OverviewTab application={application} />
       </TabsContent>
 
-      <TabsContent value="cover-letter">
+      <TabsContent value="cover-letter" forceMount className="data-[state=inactive]:hidden">
         <CoverLetterDrafter application={application} variants={variants} />
       </TabsContent>
 
-      <TabsContent value="resume">
+      <TabsContent value="resume" forceMount className="data-[state=inactive]:hidden">
         <BulletSuggester application={application} variants={variants} />
       </TabsContent>
 

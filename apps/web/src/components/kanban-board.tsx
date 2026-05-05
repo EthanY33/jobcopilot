@@ -121,7 +121,7 @@ export function KanbanBoard() {
     onSettled: () => qc.invalidateQueries({ queryKey: ["applications"] }),
   });
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const grouped = useMemo(() => {
     const map = new Map<ApplicationStatus, AppRow[]>();

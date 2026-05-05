@@ -44,7 +44,7 @@ export function buildSuggestBulletsRequest(
   ].join("\n");
 
   return {
-    model: "claude-opus-4-6",
+    model: "claude-sonnet-4-6",
     max_tokens: 4000,
     temperature: 0.3,
     system: buildCachedPrefix(inputs.cached),
