@@ -202,11 +202,13 @@ git commit -m "feat(web): lib/ai-key for server-side header parsing"
 
 ---
 
-## Task 3: `lib/ai.ts` — Vercel AI SDK adapter (Anthropic only)
+## Task 3: `lib/ai.ts` — Vercel AI SDK adapter (Anthropic only) + streaming foundation
 
 **Files:**
 - Create: `apps/web/src/lib/ai.ts`
 - Test: `apps/web/tests/unit/ai.test.ts`
+
+**Why streaming is in Phase 2a:** Phase 1 surfaced real pain — cover letter and bullet generation feel slow because the route handlers wait for Anthropic to finish the full response before returning anything (no incremental rendering). The model-swap fix in Phase 1.5 commit `729dfe2` (Opus→Sonnet on bullets) helped speed but the perceived-speed problem persists. The right fix is streaming the response. Adding the streaming primitive (`stream()`) to `lib/ai.ts` from day one is essentially free — it's a 5-line second function. **Wiring streaming into the cover-letter and bullet-suggester UIs is deferred to Phase 2b**, because those endpoints currently return structured JSON parsed by helper functions in `packages/prompts/src/*` — streaming partial JSON character-by-character would render garbled text. Phase 2b's refactor to `generateObject` makes structured-output streaming clean (via `streamObject`); Phase 2a builds the foundation so 2b is a smaller change.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -274,6 +276,45 @@ describe("generate", () => {
     expect(result.usage.totalTokens).toBe(2);
   });
 });
+
+describe("stream", () => {
+  it("returns a Response that the route handler can return directly", async () => {
+    const { stream } = await import("@/lib/ai");
+    const res = stream({
+      key: { provider: "anthropic", key: "sk-ant-test" },
+      model: "claude-haiku-4-5-20251001",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(res).toBeInstanceOf(Response);
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    );
+  });
+
+  it("creates an Anthropic client with the user's key", async () => {
+    const { stream } = await import("@/lib/ai");
+    stream({
+      key: { provider: "anthropic", key: "sk-ant-stream" },
+      model: "claude-haiku-4-5-20251001",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(createAnthropicMock).toHaveBeenLastCalledWith({ apiKey: "sk-ant-stream" });
+  });
+});
+```
+
+Add `streamText` to the `vi.mock("ai", ...)` block at the top of the test file:
+```typescript
+const streamTextMock = vi.fn(() => ({
+  toTextStreamResponse: () => new Response("streamed", { status: 200 }),
+}));
+
+vi.mock("ai", () => ({
+  generateText: (...args: unknown[]) => generateTextMock(...args),
+  streamText: (...args: unknown[]) => streamTextMock(...args),
+}));
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -288,7 +329,7 @@ Expected: FAIL — `Cannot find module '@/lib/ai'`.
 Create `apps/web/src/lib/ai.ts`:
 
 ```typescript
-import { generateText, type CoreMessage } from "ai";
+import { generateText, streamText, type CoreMessage } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import type { AiKey } from "@/lib/ai-key";
 
@@ -315,6 +356,28 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   });
   return { text: result.text, usage: result.usage };
 }
+
+/**
+ * Streaming variant. Returns a Response that route handlers can return
+ * directly; the body is a plain text/plain stream of model output. Use for
+ * endpoints whose UX benefits from incremental rendering.
+ *
+ * Phase 2a does NOT wire stream() into the existing AI route handlers —
+ * those still call generate() because the prompt parsers in
+ * packages/prompts/* expect a complete JSON blob. Phase 2b refactors the
+ * prompts to generateObject/streamObject and switches cover-letter +
+ * bullet-suggester to streaming end-to-end.
+ */
+export function stream(opts: GenerateOptions): Response {
+  const provider = createAnthropic({ apiKey: opts.key.key });
+  const result = streamText({
+    model: provider(opts.model),
+    messages: opts.messages,
+    system: opts.system,
+    maxTokens: opts.maxTokens,
+  });
+  return result.toTextStreamResponse();
+}
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -322,13 +385,13 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
 ```bash
 pnpm -F @jobcopilot/web test tests/unit/ai.test.ts
 ```
-Expected: PASS, 3 tests green.
+Expected: PASS, 5 tests green (3 generate + 2 stream).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/lib/ai.ts apps/web/tests/unit/ai.test.ts
-git commit -m "feat(web): lib/ai vercel-sdk wrapper (anthropic-only for phase 2a)"
+git commit -m "feat(web): lib/ai vercel-sdk wrapper with generate + stream (anthropic-only)"
 ```
 
 ---
