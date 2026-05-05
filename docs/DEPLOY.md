@@ -60,6 +60,6 @@ In the Google OAuth app and GitHub OAuth app:
 ## Sanity check after deploy
 
 1. Visit the production URL → `/login` renders.
-2. Sign in with Google or GitHub → lands on `/tracker`.
+2. Sign in with Google or GitHub → lands on `/dashboard`.
 3. Add a test application → confirm it persists (Supabase row appears).
 4. Generate a cover letter draft → confirm Anthropic call succeeds (no 401 / no missing-key error in Vercel logs).
