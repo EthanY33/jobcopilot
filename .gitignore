@@ -13,3 +13,4 @@ playwright-report/
 **/playwright/.auth/
 test-results/
 coverage/
+.superpowers/
