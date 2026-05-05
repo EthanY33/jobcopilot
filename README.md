@@ -8,7 +8,7 @@ Next.js 14 · TypeScript · Supabase · Prisma · Claude API · Tailwind + shadc
 
 ## Development
 
-Prerequisites: Node 20 LTS, pnpm 10, Supabase project (URL + anon + service-role keys), Anthropic API key.
+Prerequisites: Node 20 LTS, pnpm (version pinned via `packageManager` in root `package.json`; Corepack will enforce it), Supabase project (URL + anon + service-role keys), Anthropic API key.
 
 ```bash
 pnpm install
@@ -31,7 +31,7 @@ Sign in with Google or GitHub.
 
 ```bash
 pnpm test                          # unit + integration (vitest)
-pnpm test:e2e                      # playwright e2e (requires dev server)
+pnpm test:e2e                      # playwright e2e (auto-starts dev server with mocks)
 pnpm -F @jobcopilot/prompts eval   # prompt regression harness
 ```
 

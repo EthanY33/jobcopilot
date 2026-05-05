@@ -1,6 +1,6 @@
 # Deploy
 
-JobCopilot is a single-tenant personal tool. The intended deploy target is Vercel (web) plus a hosted Supabase project (Postgres + Auth + Storage).
+JobCopilot is a single-tenant personal tool. The intended deploy target is Vercel (web) plus a hosted Supabase project (Postgres + Auth).
 
 ## Prerequisites
 
@@ -15,14 +15,15 @@ JobCopilot is a single-tenant personal tool. The intended deploy target is Verce
 2. In the Vercel dashboard, set environment variables that mirror `.env.example`:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
    - `DATABASE_URL` (Supabase pooled connection string)
-   - `DIRECT_URL` (Supabase direct connection string — used by Prisma migrations / `db:push`)
-   - `ANTHROPIC_API_KEY` — **required at runtime**. The four AI route handlers (`/api/ai/*`) read this directly. Phase 2a (BYO per-user keys) is designed but not shipped, so the env-var key is still the only auth path.
+   - `DIRECT_URL` (Supabase direct connection string — used by `db:push` and the `apply:policies` script)
+   - `ANTHROPIC_API_KEY` — **required at runtime**. All four AI route handlers (cover-letter draft, bullet suggestions, posting extract, resume parse) read this via `apps/web/src/lib/claude.ts`. Phase 2a (BYO per-user keys) is designed but not shipped, so the env-var key is still the only auth path.
    - `NEXT_PUBLIC_APP_URL` — production URL, e.g. `https://jobcopilot.vercel.app`
+
+   `SUPABASE_SERVICE_ROLE_KEY` is NOT needed on Vercel — it's only used by the local Playwright auth setup (`apps/web/tests/e2e/auth.setup.ts`).
 3. `vercel --prod` to deploy.
 
-The Next.js build runs `turbo build --filter=@jobcopilot/web`. Vercel auto-detects the pnpm + Turbo monorepo via `pnpm-workspace.yaml`.
+Vercel auto-detects the pnpm + Turbo monorepo via `pnpm-workspace.yaml` and runs `pnpm build` (which invokes `turbo run build` per `package.json`).
 
 ## Supabase (database + auth)
 
