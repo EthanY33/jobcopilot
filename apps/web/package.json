@@ -31,8 +31,10 @@
     "@tanstack/react-query": "^5.51.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "framer-motion": "^11",
     "lucide-react": "^0.400.0",
     "next": "14.2.5",
+    "next-themes": "^0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.5.0",
@@ -40,6 +42,7 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.46.0",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^20.14.0",
@@ -50,8 +53,10 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
     "jsdom": "^24.1.0",
+    "png-to-ico": "^3.0.1",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
+    "tsx": "^4.15.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
   }
