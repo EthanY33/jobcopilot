@@ -10,6 +10,10 @@ export default defineConfig({
   // route compiles (/applications/[id], /tracker) on a cold dev server,
   // which can exceed Playwright's 30s default on Windows.
   timeout: 120_000,
+  // 60s for individual `expect(...).toXxx(...)` assertions — the
+  // /applications/[id] route can take >30s to compile on first hit, so
+  // toHaveURL after a router.push needs more headroom than the default 5s.
+  expect: { timeout: 60_000 },
   use: {
     baseURL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
     trace: "on-first-retry",
