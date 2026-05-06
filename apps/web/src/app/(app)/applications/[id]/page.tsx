@@ -2,6 +2,29 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { prisma } from "@jobcopilot/db";
 import { notFound, redirect } from "next/navigation";
 import { ApplicationDetailTabs } from "@/components/application-detail-tabs";
+import { Badge } from "@/components/ui/badge";
+import { ArrowUpRight } from "lucide-react";
+import type { ApplicationStatus } from "@jobcopilot/shared";
+
+const STATUS_BADGE: Record<ApplicationStatus, "default" | "success" | "destructive" | "secondary"> = {
+  wishlist: "secondary",
+  applied: "default",
+  phone_screen: "default",
+  onsite: "default",
+  offer: "success",
+  rejected: "destructive",
+  ghosted: "destructive",
+};
+
+const STATUS_LABEL: Record<ApplicationStatus, string> = {
+  wishlist: "Wishlist",
+  applied: "Applied",
+  phone_screen: "Phone screen",
+  onsite: "Onsite",
+  offer: "Offer",
+  rejected: "Rejected",
+  ghosted: "Ghosted",
+};
 
 export default async function ApplicationPage({ params }: { params: { id: string } }) {
   const supabase = getServerSupabase();
@@ -23,15 +46,33 @@ export default async function ApplicationPage({ params }: { params: { id: string
     orderBy: { createdAt: "asc" },
   });
 
+  const status = app.status as ApplicationStatus;
+
   return (
     <div className="space-y-6">
-      <div>
-        <div className="text-sm text-muted-foreground">{app.jobPosting.company}</div>
-        <h1 className="text-3xl font-semibold tracking-tight">{app.jobPosting.title}</h1>
-        {app.jobPosting.location && (
-          <div className="mt-1 text-sm text-muted-foreground">{app.jobPosting.location}</div>
-        )}
-      </div>
+      <header className="mb-6 space-y-2">
+        <p className="font-sans text-sm text-muted-foreground/70">
+          {app.jobPosting.company}
+        </p>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">
+          {app.jobPosting.title}
+        </h1>
+        <div className="flex items-center gap-3">
+          <Badge variant={STATUS_BADGE[status]}>
+            {STATUS_LABEL[status]}
+          </Badge>
+          {app.jobPosting.sourceUrl ? (
+            <a
+              href={app.jobPosting.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Job posting <ArrowUpRight className="size-3" />
+            </a>
+          ) : null}
+        </div>
+      </header>
       <ApplicationDetailTabs
         application={JSON.parse(JSON.stringify(app))}
         variants={JSON.parse(JSON.stringify(variants))}
