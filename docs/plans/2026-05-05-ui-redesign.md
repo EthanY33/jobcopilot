@@ -1052,6 +1052,7 @@ git commit -m "feat(web): add gradient variant to Button"
 - [ ] **Step 1: Create the file**
 
 ```tsx
+import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 
@@ -1071,6 +1072,8 @@ export function GlassCard({ className, ...props }: GlassCardProps) {
   );
 }
 ```
+
+> **Correction (2026-05-06):** Original snippet referenced `React.ComponentProps` without importing React. Added `import * as React from "react"` to match the convention in `badge.tsx`/`card.tsx`; without it, `tsc --noEmit` fails. No behavioral change.
 
 - [ ] **Step 2: Commit**
 
