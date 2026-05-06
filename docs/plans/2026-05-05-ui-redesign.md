@@ -788,6 +788,8 @@ git commit -m "feat(web): add AnimatedNumber with cold-load sessionStorage gatin
 **Files:**
 - Test: `apps/web/src/components/brand/theme-toggle.test.tsx`
 - Create: `apps/web/src/components/brand/theme-toggle.tsx`
+- Create: `apps/web/vitest.setup.ts` (jsdom doesn't implement `window.matchMedia`; `next-themes` calls it on mount even with `enableSystem={false}`)
+- Modify: `apps/web/vitest.config.ts` (add `setupFiles: ["./vitest.setup.ts"]`)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -882,9 +884,29 @@ Expected: 2 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/web/src/components/brand/theme-toggle.tsx apps/web/src/components/brand/theme-toggle.test.tsx
+git add apps/web/src/components/brand/theme-toggle.tsx apps/web/src/components/brand/theme-toggle.test.tsx apps/web/vitest.setup.ts apps/web/vitest.config.ts
 git commit -m "feat(web): add ThemeToggle with mounted-only render pattern + tests"
 ```
+
+> Setup file content (`apps/web/vitest.setup.ts`):
+>
+> ```ts
+> if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+>   Object.defineProperty(window, "matchMedia", {
+>     writable: true,
+>     value: (query: string) => ({
+>       matches: false,
+>       media: query,
+>       onchange: null,
+>       addListener: () => {},
+>       removeListener: () => {},
+>       addEventListener: () => {},
+>       removeEventListener: () => {},
+>       dispatchEvent: () => false,
+>     }),
+>   });
+> }
+> ```
 
 ---
 
