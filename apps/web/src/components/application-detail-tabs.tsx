@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import type { Contact } from "@jobcopilot/shared";
 import { CoverLetterDrafter } from "./cover-letter-drafter";
 import { BulletSuggester } from "./bullet-suggester";
@@ -126,28 +128,28 @@ function OverviewTab({ application }: { application: Props["application"] }) {
     <div className="space-y-6">
       {/* Job Description */}
       {jobPosting.description && (
-        <section className="rounded-lg border border-border bg-card p-4">
+        <Card className="p-4 space-y-2">
           <h2 className="mb-2 text-sm font-semibold text-foreground">Job Description</h2>
           <p className="whitespace-pre-wrap text-sm text-muted-foreground">
             {jobPosting.description}
           </p>
-        </section>
+        </Card>
       )}
 
       {/* Requirements */}
       {Array.isArray(jobPosting.requirements) && jobPosting.requirements.length > 0 && (
-        <section className="rounded-lg border border-border bg-card p-4">
+        <Card className="p-4 space-y-2">
           <h2 className="mb-2 text-sm font-semibold text-foreground">Requirements</h2>
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
             {(jobPosting.requirements as string[]).map((req, i) => (
               <li key={i}>{req}</li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
 
       {/* Notes */}
-      <section className="rounded-lg border border-border bg-card p-4">
+      <Card className="p-4 space-y-2">
         <h2 className="mb-2 text-sm font-semibold text-foreground">Notes</h2>
         <Textarea
           value={notes}
@@ -156,20 +158,20 @@ function OverviewTab({ application }: { application: Props["application"] }) {
           className="min-h-[120px]"
           maxLength={5000}
         />
-      </section>
+      </Card>
 
       {/* Follow-up date */}
-      <section className="rounded-lg border border-border bg-card p-4">
+      <Card className="p-4 space-y-2">
         <h2 className="mb-2 text-sm font-semibold text-foreground">Follow-up Date</h2>
         <Input
           type="date"
           value={followUpAt}
           onChange={(e) => { setFollowUpAt(e.target.value); setSaved(false); }}
         />
-      </section>
+      </Card>
 
       {/* Contacts */}
-      <section className="rounded-lg border border-border bg-card p-4">
+      <Card className="p-4 space-y-2">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Contacts</h2>
           <Button variant="outline" size="sm" onClick={addContact}>
@@ -243,7 +245,7 @@ function OverviewTab({ application }: { application: Props["application"] }) {
             </div>
           ))}
         </div>
-      </section>
+      </Card>
 
       {/* Save */}
       <div className="flex items-center gap-3">
@@ -251,7 +253,7 @@ function OverviewTab({ application }: { application: Props["application"] }) {
           {saving ? "Saving…" : "Save Changes"}
         </Button>
         {saved && !saving && (
-          <span className="text-sm text-green-600 dark:text-green-400">Saved!</span>
+          <span className="text-sm text-success">Saved!</span>
         )}
         {saveError && (
           <span className="text-sm text-destructive">{saveError}</span>
@@ -293,13 +295,9 @@ function TimelineTab({ application }: { application: Props["application"] }) {
             <span className="font-medium capitalize text-foreground">
               {draft.kind.replace(/_/g, " ")}
             </span>
-            <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
-              v{draft.version}
-            </span>
+            <Badge variant="secondary" className="font-mono text-[10px]">v{draft.version}</Badge>
             {draft.finalized && (
-              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                Finalized
-              </span>
+              <Badge variant="success">Finalized</Badge>
             )}
           </div>
           <span className="text-xs text-muted-foreground">
