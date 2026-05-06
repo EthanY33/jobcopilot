@@ -1536,13 +1536,15 @@ git commit -m "test(web): add per-page axe a11y suite via @axe-core/playwright"
 
 ## Task A22: Phase A acceptance — run full suite
 
-- [ ] **Step 1: Lint, typecheck, unit tests**
+- [ ] **Step 1: Typecheck + unit tests** (lint deferred — see correction below)
 
 ```bash
-pnpm -F @jobcopilot/web lint && pnpm -F @jobcopilot/web typecheck && pnpm -F @jobcopilot/web test
+pnpm -F @jobcopilot/web typecheck && pnpm -F @jobcopilot/web test
 ```
 
 Expected: all green.
+
+> **Correction (2026-05-06):** Original step ran `pnpm lint` first, but the `apps/web` package has no `.eslintrc*` or `eslint.config.*` (never configured in repo despite `eslint-config-next` being in devDeps). `next lint` then prompts interactively to bootstrap a config, hanging in autonomous runs. Setting up ESLint is out-of-scope for this redesign; lint setup is its own task. Skipping the lint check; typecheck + tests remain the automated gates.
 
 - [ ] **Step 2: Run the existing e2e ship-criterion test**
 
