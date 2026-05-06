@@ -667,14 +667,13 @@ git commit -m "feat(web): add OrbBackground (drifting gradient orbs, reduce-moti
 - [ ] **Step 1: Write the failing test**
 
 ```tsx
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
 import { AnimatedNumber } from "./animated-number";
 
 describe("AnimatedNumber", () => {
   beforeEach(() => {
     sessionStorage.clear();
-    vi.useFakeTimers();
   });
 
   it("renders the target value immediately on subsequent loads (flag set)", () => {
@@ -693,14 +692,15 @@ describe("AnimatedNumber", () => {
   });
 
   it("renders the integer value at the end of the animation duration", async () => {
-    const { container } = render(<AnimatedNumber value={42} flagKey="test:key" durationMs={1000} />);
+    const { container } = render(<AnimatedNumber value={42} flagKey="test:key" durationMs={300} />);
     expect(container.textContent).toBe("0");
-    vi.advanceTimersByTime(1100);
-    // After the duration the displayed integer equals the target
+    await new Promise((r) => setTimeout(r, 400));
     expect(container.textContent).toBe("42");
   });
 });
 ```
+
+> Why no `vi.useFakeTimers()`: jsdom drives `requestAnimationFrame` via an internal counter that leaks state between tests when fake timers are toggled mid-suite — test 2's RAF call increments the counter to 1, then test 3's RAF goes 1→2 and never creates a new driver. Real timers throughout sidesteps the leak. Tests 1 and 2 are synchronous, test 3 uses a real-timer setTimeout wait with a short `durationMs={300}` to keep the suite fast.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -745,8 +745,9 @@ export function AnimatedNumber({ value, flagKey, durationMs = 1200, className }:
     const from = 0;
     const to = value;
 
-    function tick(now: number) {
-      const t = Math.min(1, (now - start) / durationMs);
+    function tick() {
+      const elapsed = performance.now() - start;
+      const t = Math.max(0, Math.min(1, elapsed / durationMs));
       const eased = 1 - Math.pow(1 - t, 3);
       setDisplay(Math.round(from + (to - from) * eased));
       if (t < 1) requestAnimationFrame(tick);
@@ -758,6 +759,8 @@ export function AnimatedNumber({ value, flagKey, durationMs = 1200, className }:
 }
 ```
 
+> Why `performance.now()` inside `tick()` (not the RAF callback's `now` arg): the RAF callback's timestamp uses jsdom's animation clock, which can be on a different time base than `performance.now()` used for `start`. Computing `elapsed = performance.now() - start` keeps both reads on the same clock. The `Math.max(0, ...)` clamp also guards against any briefly-negative drift. In real browsers RAF and `performance.now()` track each other within a frame so the production behavior is unchanged.
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
@@ -765,8 +768,6 @@ pnpm -F @jobcopilot/web test src/components/brand/animated-number.test.tsx
 ```
 
 Expected: 3 tests PASS.
-
-> **Note:** the third test relies on `requestAnimationFrame` advancing under fake timers. If it flakes, replace `vi.advanceTimersByTime(1100)` with explicit `await new Promise(r => setTimeout(r, 1300))` after `vi.useRealTimers()` for that specific test.
 
 - [ ] **Step 5: Commit**
 
