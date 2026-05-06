@@ -2,18 +2,14 @@
 
 import { useMemo, useState } from "react";
 import {
-  DndContext,
-  DragOverlay,
-  type DragEndEvent,
-  type DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  useDroppable,
+  DndContext, DragOverlay,
+  type DragEndEvent, type DragStartEvent,
+  PointerSensor, useSensor, useSensors, useDroppable,
 } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApplicationCard } from "./application-card";
+import { Badge } from "@/components/ui/badge";
 import type { ApplicationStatus } from "@jobcopilot/shared";
 import { APPLICATION_STATUSES } from "@jobcopilot/shared";
 
@@ -27,6 +23,16 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   ghosted: "Ghosted",
 };
 
+const EMPTY_HINTS: Record<ApplicationStatus, string> = {
+  wishlist: "no applications saved yet",
+  applied: "no applications in this stage",
+  phone_screen: "no phone screens scheduled",
+  onsite: "no onsites scheduled",
+  offer: "no offers yet",
+  rejected: "no rejections logged",
+  ghosted: "no ghostings logged",
+};
+
 interface AppRow {
   id: string;
   status: ApplicationStatus;
@@ -34,33 +40,38 @@ interface AppRow {
   jobPosting: { title: string; company: string };
 }
 
-interface KanbanColumnProps {
-  status: ApplicationStatus;
-  cards: AppRow[];
-}
-
-function KanbanColumn({ status, cards }: KanbanColumnProps) {
+function KanbanColumn({ status, cards }: { status: ApplicationStatus; cards: AppRow[] }) {
   const { setNodeRef } = useDroppable({ id: status });
-
   return (
     <div className="min-w-[200px] space-y-2">
       <div className="flex items-center justify-between px-1">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">
+        <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
           {STATUS_LABELS[status]}
         </div>
-        <div className="text-xs text-muted-foreground">{cards.length}</div>
+        <Badge variant="outline" className="font-mono text-[10px]">{cards.length}</Badge>
       </div>
       <SortableContext items={cards.map((a) => a.id)} id={status}>
-        <div ref={setNodeRef} className="space-y-2 rounded-md bg-secondary/30 p-2 min-h-[100px]">
-          {cards.map((a) => (
-            <ApplicationCard
-              key={a.id}
-              id={a.id}
-              title={a.jobPosting.title}
-              company={a.jobPosting.company}
-              updatedAt={a.lastActivityAt}
-            />
-          ))}
+        <div
+          ref={setNodeRef}
+          className="space-y-2 rounded-lg bg-secondary/20 p-2 min-h-[120px] transition-colors"
+        >
+          {cards.length === 0 ? (
+            <div className="flex h-[100px] items-center justify-center rounded-md border border-dashed border-border/50">
+              <span className="font-sans text-xs italic text-muted-foreground/60">
+                {EMPTY_HINTS[status]}
+              </span>
+            </div>
+          ) : (
+            cards.map((a) => (
+              <ApplicationCard
+                key={a.id}
+                id={a.id}
+                title={a.jobPosting.title}
+                company={a.jobPosting.company}
+                updatedAt={a.lastActivityAt}
+              />
+            ))
+          )}
         </div>
       </SortableContext>
     </div>
@@ -70,11 +81,7 @@ function KanbanColumn({ status, cards }: KanbanColumnProps) {
 function resolveTargetStatus(e: DragEndEvent): ApplicationStatus | null {
   const overId = e.over?.id;
   if (!overId) return null;
-  // Dropped directly on a column (from useDroppable)
-  if (APPLICATION_STATUSES.includes(overId as ApplicationStatus)) {
-    return overId as ApplicationStatus;
-  }
-  // Dropped on a card — get its container's status via SortableContext
+  if (APPLICATION_STATUSES.includes(overId as ApplicationStatus)) return overId as ApplicationStatus;
   const containerId = e.over?.data.current?.sortable?.containerId as string | undefined;
   if (containerId && APPLICATION_STATUSES.includes(containerId as ApplicationStatus)) {
     return containerId as ApplicationStatus;
@@ -85,11 +92,7 @@ function resolveTargetStatus(e: DragEndEvent): ApplicationStatus | null {
 export function KanbanBoard() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const qc = useQueryClient();
-  const {
-    data: apps = [],
-    isLoading,
-    isError,
-  } = useQuery<AppRow[]>({
+  const { data: apps = [], isLoading, isError } = useQuery<AppRow[]>({
     queryKey: ["applications"],
     queryFn: async () => {
       const r = await fetch("/api/applications");
@@ -115,9 +118,7 @@ export function KanbanBoard() {
       );
       return { prev };
     },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["applications"], ctx.prev);
-    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(["applications"], ctx.prev); },
     onSettled: () => qc.invalidateQueries({ queryKey: ["applications"] }),
   });
 
@@ -132,9 +133,7 @@ export function KanbanBoard() {
 
   const activeApp = activeId ? apps.find((a) => a.id === activeId) : null;
 
-  function onDragStart(e: DragStartEvent) {
-    setActiveId(e.active.id as string);
-  }
+  function onDragStart(e: DragStartEvent) { setActiveId(e.active.id as string); }
 
   function onDragEnd(e: DragEndEvent) {
     setActiveId(null);
@@ -147,35 +146,31 @@ export function KanbanBoard() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
-        Loading applications…
-      </div>
-    );
+    return <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">Loading applications…</div>;
   }
-
   if (isError) {
-    return (
-      <div className="flex items-center justify-center py-16 text-destructive text-sm">
-        Failed to load applications. Please refresh and try again.
-      </div>
-    );
+    return <div className="flex items-center justify-center py-16 text-destructive text-sm">Failed to load applications. Please refresh and try again.</div>;
   }
 
   return (
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-      <div className="grid grid-cols-7 gap-3 overflow-x-auto">
+      <div className="grid grid-cols-7 gap-3 overflow-x-auto pb-2">
         {APPLICATION_STATUSES.map((status) => (
           <KanbanColumn key={status} status={status} cards={grouped.get(status) ?? []} />
         ))}
       </div>
       <DragOverlay>
         {activeApp ? (
-          <div className="rounded-md border border-border bg-card p-3 text-sm shadow-lg">
-            <div className="font-medium truncate">{activeApp.jobPosting.title}</div>
-            <div className="text-xs text-muted-foreground truncate">
-              {activeApp.jobPosting.company}
-            </div>
+          <div
+            style={{ transform: "scale(1.02) rotate(1deg)" }}
+            className="shadow-2xl shadow-[hsl(var(--brand-violet)/.4)]"
+          >
+            <ApplicationCard
+              id={activeApp.id}
+              title={activeApp.jobPosting.title}
+              company={activeApp.jobPosting.company}
+              updatedAt={activeApp.lastActivityAt}
+            />
           </div>
         ) : null}
       </DragOverlay>
