@@ -162,8 +162,11 @@ function OverviewTab({ application }: { application: Props["application"] }) {
 
       {/* Follow-up date */}
       <Card className="p-4 space-y-2">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Follow-up Date</h2>
+        <Label htmlFor="follow-up-date" className="mb-2 block text-sm font-semibold text-foreground">
+          Follow-up Date
+        </Label>
         <Input
+          id="follow-up-date"
           type="date"
           value={followUpAt}
           onChange={(e) => { setFollowUpAt(e.target.value); setSaved(false); }}
