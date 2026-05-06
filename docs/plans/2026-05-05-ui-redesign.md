@@ -668,7 +668,7 @@ git commit -m "feat(web): add OrbBackground (drifting gradient orbs, reduce-moti
 
 ```tsx
 import { describe, it, expect, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { AnimatedNumber } from "./animated-number";
 
 describe("AnimatedNumber", () => {
@@ -676,10 +676,10 @@ describe("AnimatedNumber", () => {
     sessionStorage.clear();
   });
 
-  it("renders the target value immediately on subsequent loads (flag set)", () => {
+  it("renders the target value without animating on subsequent loads (flag set)", async () => {
     sessionStorage.setItem("jobcopilot:dashboard_seen", "1");
     const { container } = render(<AnimatedNumber value={42} flagKey="jobcopilot:dashboard_seen" />);
-    expect(container.textContent).toBe("42");
+    await waitFor(() => expect(container.textContent).toBe("42"));
   });
 
   it("animates from 0 on first load and sets the flag", () => {
@@ -725,17 +725,20 @@ interface AnimatedNumberProps {
 }
 
 export function AnimatedNumber({ value, flagKey, durationMs = 1200, className }: AnimatedNumberProps) {
-  const seen = typeof window !== "undefined" && window.sessionStorage.getItem(flagKey) === "1";
-  const [display, setDisplay] = useState<number>(seen ? value : 0);
+  const [display, setDisplay] = useState<number>(0);
   const startedRef = useRef(false);
 
   useEffect(() => {
-    if (seen) return;
     if (startedRef.current) return;
     startedRef.current = true;
+
+    const seen = window.sessionStorage.getItem(flagKey) === "1";
+    if (seen) {
+      setDisplay(value);
+      return;
+    }
     window.sessionStorage.setItem(flagKey, "1");
 
-    if (typeof window === "undefined") return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       setDisplay(value);
       return;
@@ -753,11 +756,13 @@ export function AnimatedNumber({ value, flagKey, durationMs = 1200, className }:
       if (t < 1) requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
-  }, [value, flagKey, durationMs, seen]);
+  }, [value, flagKey, durationMs]);
 
   return <span className={className}>{display}</span>;
 }
 ```
+
+> Why initial state is always `0` and `sessionStorage` is read inside the effect: the component is `"use client"` but client components are still SSR'd by the App Router. If `display` were initialized from `sessionStorage` at render time, the server would always emit `0` (no `window`) while the client could initialize to `value` on warm loads — that's a hydration mismatch. Reading the flag inside `useEffect` keeps the SSR HTML and the first client render in sync; on warm loads the effect calls `setDisplay(value)` synchronously.
 
 > Why `performance.now()` inside `tick()` (not the RAF callback's `now` arg): the RAF callback's timestamp uses jsdom's animation clock, which can be on a different time base than `performance.now()` used for `start`. Computing `elapsed = performance.now() - start` keeps both reads on the same clock. The `Math.max(0, ...)` clamp also guards against any briefly-negative drift. In real browsers RAF and `performance.now()` track each other within a frame so the production behavior is unchanged.
 
