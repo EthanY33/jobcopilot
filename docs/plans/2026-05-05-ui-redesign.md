@@ -301,12 +301,16 @@ git commit -m "feat(web): extend tailwind config — success/warning, geist disp
 "use client";
 
 import * as React from "react";
-import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
+import { ThemeProvider as NextThemesProvider } from "next-themes";
+
+type ThemeProviderProps = React.ComponentProps<typeof NextThemesProvider>;
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
 }
 ```
+
+> Why this shape: `next-themes@^0.3` does not re-export `ThemeProviderProps` from its package root, and reaching into `next-themes/dist/types` is brittle. Deriving the type with `React.ComponentProps<typeof NextThemesProvider>` keeps imports rooted at the public API.
 
 - [ ] **Step 2: Commit**
 
