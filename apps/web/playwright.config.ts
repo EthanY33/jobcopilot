@@ -6,6 +6,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
+  // 120s budget per test: the ship-criterion flow drives 3 API calls and 2
+  // route compiles (/applications/[id], /tracker) on a cold dev server,
+  // which can exceed Playwright's 30s default on Windows.
+  timeout: 120_000,
   use: {
     baseURL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
     trace: "on-first-retry",
