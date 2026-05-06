@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { GlassCard } from "@/components/brand/glass-card";
 import type { BulletSuggestion } from "@jobcopilot/prompts";
 
 interface Props {
@@ -39,15 +41,15 @@ export function BulletSuggester({ application, variants }: Props) {
 
   if (variants.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
+      <Card className="p-6 text-sm text-muted-foreground">
         Create a resume variant first to use the bullet suggester.
-      </div>
+      </Card>
     );
   }
 
   return (
     <div className="space-y-4">
-      <section className="rounded-lg border border-border bg-card p-6">
+      <GlassCard><div className="p-6">
         <h2 className="text-lg font-medium">Resume bullet suggester</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Claude proposes role-tailored rewrites. Truthfulness preserved — only phrasing shifts.
@@ -65,23 +67,23 @@ export function BulletSuggester({ application, variants }: Props) {
               ))}
             </select>
           </div>
-          <Button onClick={() => void generate()} disabled={busy || !variantId}>
+          <Button variant="gradient" onClick={() => void generate()} disabled={busy || !variantId}>
             {busy ? "Suggesting..." : "Suggest"}
           </Button>
         </div>
         {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
-      </section>
+      </div></GlassCard>
 
       {busy && (
-        <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+        <Card className="p-6 text-center text-sm text-muted-foreground">
           Generating suggestions…
-        </div>
+        </Card>
       )}
 
       {suggestions.length > 0 && (
         <section className="space-y-3">
           {suggestions.map((s, i) => (
-            <div key={i} className="rounded-lg border border-border bg-card p-4">
+            <Card key={i} className="p-4">
               <div className="text-xs uppercase tracking-wider text-muted-foreground">
                 {s.section}
               </div>
@@ -98,7 +100,7 @@ export function BulletSuggester({ application, variants }: Props) {
               <p className="mt-3 border-t border-border pt-2 text-xs italic text-muted-foreground">
                 {s.rationale}
               </p>
-            </div>
+            </Card>
           ))}
         </section>
       )}
