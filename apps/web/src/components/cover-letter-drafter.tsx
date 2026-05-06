@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { GlassCard } from "@/components/brand/glass-card";
 
 interface Draft {
   id: string;
@@ -110,15 +113,13 @@ export function CoverLetterDrafter({ application, variants }: Props) {
   return (
     <div className="grid grid-cols-3 gap-4">
       {/* Editor section - 2 cols */}
-      <section className="col-span-2 space-y-4 rounded-lg border border-border bg-card p-6">
+      <Card className="col-span-2"><CardContent className="space-y-4 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium">
             Cover letter {currentDraft ? `· v${currentDraft.version}` : ""}
           </h2>
           {currentDraft?.finalized && (
-            <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
-              Finalized
-            </span>
+            <Badge variant="success">Finalized</Badge>
           )}
         </div>
         <Textarea
@@ -135,10 +136,10 @@ export function CoverLetterDrafter({ application, variants }: Props) {
             {busyAction === "save" ? "Saving…" : "Finalize"}
           </Button>
         </div>
-      </section>
+      </CardContent></Card>
 
       {/* AI panel - 1 col */}
-      <section className="space-y-4 rounded-lg border border-border bg-card p-6">
+      <GlassCard><div className="space-y-4 p-6">
         <h2 className="text-lg font-medium">AI panel</h2>
         <div className="space-y-2">
           <Label htmlFor="variant">Resume variant</Label>
@@ -162,7 +163,7 @@ export function CoverLetterDrafter({ application, variants }: Props) {
             placeholder="e.g., emphasize Claude API work"
           />
         </div>
-        <Button className="w-full" onClick={() => void draft()} disabled={busyAction !== null || !variantId}>
+        <Button variant="gradient" className="w-full" onClick={() => void draft()} disabled={busyAction !== null || !variantId}>
           {busyAction === "draft" ? "Drafting..." : localLetters.length ? "Regenerate" : "Draft"}
         </Button>
 
@@ -172,9 +173,11 @@ export function CoverLetterDrafter({ application, variants }: Props) {
               Alternate openings
             </div>
             {alternates.map((alt, i) => (
-              <button
+              <Button
                 key={i}
-                className="block w-full rounded-md border border-border bg-secondary/40 p-2 text-left text-xs hover:bg-secondary"
+                variant="ghost"
+                size="sm"
+                className="block h-auto w-full justify-start whitespace-normal text-left text-xs"
                 onClick={() =>
                   setEditedBody((body) => {
                     const rest = body.split("\n").slice(1).join("\n");
@@ -183,7 +186,7 @@ export function CoverLetterDrafter({ application, variants }: Props) {
                 }
               >
                 {alt}
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -192,20 +195,22 @@ export function CoverLetterDrafter({ application, variants }: Props) {
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Versions</div>
             {localLetters.map((d) => (
-              <button
+              <Button
                 key={d.id}
-                className="block w-full rounded-md border border-border bg-background p-2 text-left text-xs hover:bg-secondary"
+                variant="ghost"
+                size="sm"
+                className="block h-auto w-full justify-start text-left text-xs"
                 onClick={() => setCurrentDraft(d)}
               >
                 v{d.version} {d.finalized ? " · final" : ""} ·{" "}
                 {new Date(d.createdAt).toLocaleString()}
-              </button>
+              </Button>
             ))}
           </div>
         )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-      </section>
+      </div></GlassCard>
     </div>
   );
 }
