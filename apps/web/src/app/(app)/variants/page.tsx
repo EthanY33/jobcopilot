@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface Variant {
   id: string;
@@ -18,6 +19,7 @@ export default function VariantsPage() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const newNameRef = useRef<HTMLInputElement>(null);
 
   async function reload() {
     const r = await fetch("/api/variants");
@@ -83,47 +85,61 @@ export default function VariantsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Resume variants</h1>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">Resume variants</h1>
 
-      <section className="rounded-lg border border-border bg-card p-6">
-        <h2 className="text-lg font-medium">New variant</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Clones bullets from your Base variant. Edit keywords after creating to bias the
-          bullet suggester.
-        </p>
-        <div className="mt-3 flex items-end gap-3">
-          <div className="grow space-y-2">
-            <Label>Name</Label>
-            <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="AI/ML focus"
-            />
+      <Card>
+        <CardContent className="p-6">
+          <h2 className="text-lg font-medium">New variant</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Clones bullets from your Base variant. Edit keywords after creating to bias the
+            bullet suggester.
+          </p>
+          <div className="mt-3 flex items-end gap-3">
+            <div className="grow space-y-2">
+              <Label htmlFor="variant-name">Name</Label>
+              <Input
+                ref={newNameRef}
+                id="variant-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="AI/ML focus"
+              />
+            </div>
+            <Button onClick={create} disabled={!newName.trim() || creating}>
+              {creating ? "Creating…" : "Create (from Base)"}
+            </Button>
           </div>
-          <Button onClick={create} disabled={!newName.trim() || creating}>
-            {creating ? "Creating…" : "Create (from Base)"}
-          </Button>
-        </div>
-        {error && <div className="mt-3 text-sm text-destructive">{error}</div>}
-      </section>
+          {error && <div className="mt-3 text-sm text-destructive">{error}</div>}
+        </CardContent>
+      </Card>
 
-      <section className="space-y-3">
-        {variants.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+      {variants.length === 0 ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground border border-dashed border-border rounded-lg">
             No variants yet. Upload a resume on the Profile page to create your Base
             variant.
-          </div>
-        ) : (
-          variants.map((v) => (
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {variants.map((v) => (
             <VariantRow
               key={v.id}
               variant={v}
               onUpdateKeywords={(kw) => updateKeywords(v.id, kw)}
               onDelete={() => remove(v.id)}
             />
-          ))
-        )}
-      </section>
+          ))}
+          <Card
+            className="border-dashed border-border/60 hover:border-primary/40 transition-colors cursor-pointer"
+            onClick={() => newNameRef.current?.focus()}
+          >
+            <CardContent className="flex h-full min-h-[120px] items-center justify-center">
+              <span className="text-sm text-muted-foreground">+ New variant</span>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -139,41 +155,46 @@ function VariantRow({
 }) {
   const [text, setText] = useState(variant.emphasisKeywords.join(", "));
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <div className="font-medium">{variant.name}</div>
-        {variant.name !== "Base" && (
-          <Button variant="ghost" size="sm" onClick={onDelete}>
-            Delete
-          </Button>
-        )}
-      </div>
-      <div className="mt-3 space-y-2">
-        <Label>Emphasis keywords (comma-separated)</Label>
-        <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={() => {
-            const next = Array.from(
-              new Set(
-                text
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              ),
-            );
-            const prev = variant.emphasisKeywords;
-            const same =
-              next.length === prev.length && next.every((k, i) => k === prev[i]);
-            if (!same) onUpdateKeywords(next);
-          }}
-          className="min-h-[60px]"
-        />
-      </div>
-      <div className="mt-3 text-xs text-muted-foreground">
-        {variant.bullets.length} sections ·{" "}
-        {variant.bullets.reduce((n, s) => n + s.items.length, 0)} bullets
-      </div>
-    </div>
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="font-medium">{variant.name}</div>
+          {variant.name !== "Base" && (
+            <Button variant="ghost" size="sm" onClick={onDelete}>
+              Delete
+            </Button>
+          )}
+        </div>
+        <div className="mt-3 space-y-2">
+          <Label htmlFor={`emphasis-${variant.id}`}>
+            Emphasis keywords (comma-separated)
+          </Label>
+          <Textarea
+            id={`emphasis-${variant.id}`}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={() => {
+              const next = Array.from(
+                new Set(
+                  text
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                ),
+              );
+              const prev = variant.emphasisKeywords;
+              const same =
+                next.length === prev.length && next.every((k, i) => k === prev[i]);
+              if (!same) onUpdateKeywords(next);
+            }}
+            className="min-h-[60px]"
+          />
+        </div>
+        <div className="mt-3 text-xs text-muted-foreground">
+          {variant.bullets.length} sections ·{" "}
+          {variant.bullets.reduce((n, s) => n + s.items.length, 0)} bullets
+        </div>
+      </CardContent>
+    </Card>
   );
 }
