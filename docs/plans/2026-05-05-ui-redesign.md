@@ -2600,30 +2600,44 @@ git tag feature-complete
 
 # Phase I — Demo recording (owner: Ethan, async)
 
-## Task I1: README link update
+> **Correction (2026-05-07):** original Task I1 specified an OS-recorder MP4 uploaded as a GitHub release asset, linked from the README. Direction changed mid-execution to an **Arcade** ([arcade.software](https://arcade.software)) interactive demo — the click-through-with-hotspots pattern most AI-startup READMEs use (Cursor, Linear, Vercel). README still can't embed iframes (GitHub sanitizes them), so the embed pattern is *preview MP4/GIF in the README that links out to the hosted Arcade URL*. Cost: free tier (3 demos, Arcade watermark in corner) is fine for this personal project; the previously-locked $0 cost rule still holds.
 
-**Owner:** Ethan (manual).
+## Task I1: Arcade interactive demo + README embed
+
+**Owner:** Ethan (manual recording + edit), with a small commit pass at the end.
 
 **Files:**
 - Modify: `README.md`
+- Add: `docs/assets/jobcopilot-demo.mp4` (or `.gif`) — the preview asset Arcade exports
 
-- [ ] **Step 1 (Ethan, manual):** Record a 30-60s screen capture of drafting + submitting an application via the redesigned app. Tools: built-in OS recorder, OBS, or similar. Export as MP4.
+- [ ] **Step 1 (Ethan, manual):** Sign up at arcade.software (free). Install the Arcade Chrome extension *or* download the desktop capture app.
 
-- [ ] **Step 2 (Ethan, manual):** Create a new GitHub release on the repo (`gh release create vX.Y.Z-redesign --notes "UI redesign demo"`). Upload the MP4 as a release asset.
+- [ ] **Step 2 (Ethan, manual):** Record a 30–60 s click-through of the ship-criterion flow: Tracker → Add application → drafter generates cover letter → review → mark Applied. The recorder captures each click as a distinct step; Arcade auto-segments them into a scrubbable timeline.
 
-- [ ] **Step 3 (Subagent or Ethan):** Once Ethan provides the release asset URL, update `README.md`:
+- [ ] **Step 3 (Ethan, manual, in Arcade editor):** Edit hotspot positions and tooltip captions for each step. Trim dead time. Title slide: "JobCopilot — AI drafts every piece of an application". End slide: "github.com/EthanY33/jobcopilot".
 
-Add at the top after the title:
+- [ ] **Step 4 (Ethan, manual):** From the Arcade editor, copy two artifacts:
+  1. The **public share URL** (looks like `https://app.arcade.software/share/<id>`).
+  2. The **preview MP4** (Arcade → Share → Download → MP4). Save as `docs/assets/jobcopilot-demo.mp4`. If Arcade's free tier won't export MP4, download the GIF instead and adjust the embed.
+
+- [ ] **Step 5 (Subagent or Ethan):** Embed in `README.md` directly below the brand-hero `<p>` and above `# JobCopilot`:
 
 ```markdown
-> [Watch the 60-second demo](https://github.com/<owner>/<repo>/releases/download/<tag>/jobcopilot-demo.mp4)
+<p align="center">
+  <a href="https://app.arcade.software/share/<id>">
+    <img src="docs/assets/jobcopilot-demo.mp4" alt="JobCopilot — 60-second interactive demo (click to scrub through the full app on Arcade)" width="100%">
+  </a>
+</p>
+<p align="center"><sub><a href="https://app.arcade.software/share/<id>">▶ Try the interactive demo on Arcade</a></sub></p>
 ```
 
-- [ ] **Step 4: Commit**
+GitHub renders inline `<img src="*.mp4">` as an autoplay-loop muted video player. The `<a>` wrap makes the whole frame click out to the scrubbable Arcade demo. Substitute `<id>` with the actual share id; if you exported a `.gif`, change the `src` extension and drop the autoplay-loop assumption (GIFs animate natively).
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add README.md
-git commit -m "docs(readme): add demo recording link"
+git add README.md docs/assets/jobcopilot-demo.mp4
+git commit -m "docs(readme): add Arcade interactive demo + preview"
 ```
 
 ---
