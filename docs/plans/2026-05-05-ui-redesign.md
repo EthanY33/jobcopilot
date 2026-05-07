@@ -2486,7 +2486,7 @@ export default function LoginPage() {
   async function signIn(provider: "google" | "github") {
     await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: { redirectTo: `${window.location.origin}/api/auth/callback` },
     });
   }
 
@@ -2521,6 +2521,8 @@ pnpm -F @jobcopilot/web test:e2e -- tests/e2e/axe.login.spec.ts
 ```
 
 Expected: green. Manually verify clicking either button starts an OAuth flow.
+
+> **Correction (2026-05-06):** Original snippet used `redirectTo: ${origin}/dashboard`. The existing login page uses `${origin}/api/auth/callback`, which exchanges the OAuth `?code=` for a session via `@supabase/ssr` PKCE flow before redirecting to `/dashboard`. Sending OAuth straight to `/dashboard` skips the exchange and breaks the session. Snippet updated to preserve the callback URL — visual treatment is unchanged.
 
 - [ ] **Step 4: Commit**
 
