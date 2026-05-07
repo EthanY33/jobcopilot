@@ -88,3 +88,15 @@
     }
   }
 }
+
+@keyframes badge-pulse {
+  0% { opacity: .6; }
+  50% { opacity: 1; }
+  100% { opacity: .6; }
+}
+.animate-badge-pulse {
+  animation: badge-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-badge-pulse { animation: none; opacity: 1; }
+}
