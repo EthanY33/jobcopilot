@@ -1,11 +1,14 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Lockup } from "@/components/brand/lockup";
+import { OrbBackground } from "@/components/brand/orb-background";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const supabase = getBrowserSupabase();
+
   async function signIn(provider: "google" | "github") {
-    const supabase = getBrowserSupabase();
     await supabase.auth.signInWithOAuth({
       provider,
       options: { redirectTo: `${window.location.origin}/api/auth/callback` },
@@ -13,18 +16,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">JobCopilot</h1>
-        <p className="text-sm text-muted-foreground">AI-assisted job applications.</p>
-      </div>
-      <div className="space-y-3">
-        <Button className="w-full" onClick={() => signIn("google")}>
-          Continue with Google
-        </Button>
-        <Button className="w-full" variant="outline" onClick={() => signIn("github")}>
-          Continue with GitHub
-        </Button>
+    <div className="relative flex min-h-screen items-center justify-center p-8">
+      <OrbBackground />
+      <div className="relative z-10 w-full max-w-sm space-y-6 text-center">
+        <div className="flex justify-center">
+          <Lockup logoSize={56} wordSize={40} gap={16} />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          AI drafts every piece of an application. You review and ship.
+        </p>
+        <div className="space-y-3">
+          <Button variant="gradient" className="w-full" onClick={() => signIn("google")}>
+            Continue with Google
+          </Button>
+          <Button variant="outline" className="w-full" onClick={() => signIn("github")}>
+            Continue with GitHub
+          </Button>
+        </div>
       </div>
     </div>
   );
