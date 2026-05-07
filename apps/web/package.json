@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "build:brand": "tsx scripts/build-brand-assets.ts",
-    "build:hero": "tsx scripts/build-brand-hero.ts"
+    "build:hero": "tsx scripts/build-brand-hero.ts",
+    "build:screenshots": "tsx scripts/build-screenshots.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",
