@@ -2453,6 +2453,8 @@ git add apps/web/src/app/(app)/profile/page.tsx apps/web/src/app/globals.css
 git commit -m "feat(web): profile — two-col layout, defined empty/extracting states, GlassCard upload"
 ```
 
+> **Correction (2026-05-06):** The pseudocode pictures only `identity + skills/extracting/upload`, but the existing `profile/page.tsx` carries five more functional sections (Contact + preferences with phone/URLs/checkboxes, Target roles, Target locations, Save action, Base resume text). The profile schema also has no `email` or `name` field — identity would have to be fetched separately from `supabase.auth.getUser()`. Adapted scope: drop the dedicated 280px identity column (no clean source for it on this client component), keep a single-column layout, convert each existing `<section className="rounded-lg border ...">` to `<Card><CardContent>`, replace the upload section with a `<GlassCard>` (matching the plan's "GlassCard upload" intent), and render `profile.skills` as `<Badge variant="secondary">` chips with the `animate-badge-pulse` empty/extracting state. Visual treatment is preserved; layout deviation is documented in the commit body.
+
 ---
 
 # Phase G — Login
