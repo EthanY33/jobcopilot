@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useLayoutEffect } from "react";
 import { LayoutGrid, Trello, Copy, User } from "lucide-react";
 import styles from "../marketing.module.css";
+import { useMouseParallax } from "../use-mouse-parallax";
 
 const TAB_LABELS = ["Overview", "Cover Letter", "Resume", "Answers", "Timeline"] as const;
 // Cycle order is Cover Letter → Resume → Answers (indices 1 → 2 → 3).
@@ -17,6 +18,7 @@ export function HeroDemo() {
   const [activeIdx, setActiveIdx] = useState<number>(1);
   const tabRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
+  const { transform, handlers } = useMouseParallax();
 
   useEffect(() => {
     let cycleStep = 0;
@@ -35,7 +37,7 @@ export function HeroDemo() {
   }, [activeIdx]);
 
   return (
-    <div className={styles.frameStage}>
+    <div className={styles.frameStage} style={{ transform }} {...handlers}>
       <div className={styles.heroFrame}>
         <div className={styles.frameChrome}>
           <span className={`${styles.dot} ${styles.dotR}`} aria-hidden="true" />
