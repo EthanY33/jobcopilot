@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -17,6 +17,13 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const sourceSerif = Source_Serif_4({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-serif",
+  display: "swap",
+});
+
 import { GeistSans } from "geist/font/sans";
 
 export const metadata: Metadata = {
@@ -28,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} ${GeistSans.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${sourceSerif.variable} ${GeistSans.variable}`}
       suppressHydrationWarning
     >
       <body>
