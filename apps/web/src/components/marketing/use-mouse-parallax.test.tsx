@@ -31,8 +31,8 @@ describe("useMouseParallax", () => {
       fireEvent.mouseMove(node, { clientX: 75, clientY: 25 });
     });
 
-    expect(node.style.transform).toMatch(/rotateX\(.*deg\)/);
-    expect(node.style.transform).toMatch(/rotateY\(.*deg\)/);
+    expect(node.style.transform).toMatch(/rotateX\(-?\d+\.\d{2}deg\)/);
+    expect(node.style.transform).toMatch(/rotateY\(-?\d+\.\d{2}deg\)/);
   });
 
   it("resets to none on mouse leave", () => {

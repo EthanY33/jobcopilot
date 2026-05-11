@@ -11,7 +11,7 @@ export function useMouseParallax() {
     const x = (event.clientX - rect.left) / rect.width - 0.5;
     const y = (event.clientY - rect.top) / rect.height - 0.5;
     // rotateX(-y * 4deg) rotateY(x * 4deg) per spec §5. ±2deg total.
-    setTransform(`perspective(1200px) rotateX(${-(y * 4).toFixed(2)}deg) rotateY(${(x * 4).toFixed(2)}deg)`);
+    setTransform(`perspective(1200px) rotateX(${(-y * 4).toFixed(2)}deg) rotateY(${(x * 4).toFixed(2)}deg)`);
   }, []);
 
   const onMouseLeave = useCallback(() => {
