@@ -1,6 +1,6 @@
 # JobCopilot Marketing Landing — Design Spec
 
-**Status:** Approved 2026-05-07 · ready for `writing-plans` (Phase I retarget — Claude-built marketing landing replaces Arcade interactive demo)
+**Status:** Approved 2026-05-07 · open questions resolved 2026-05-07 (§10) · ready for `writing-plans` (Phase I retarget — Claude-built marketing landing replaces Arcade interactive demo)
 **Author:** Ethan Yucetepe (with Claude as scribe)
 **Brainstorm session:** 2026-05-07 (visual companion + 11-iteration live prototype)
 **Locked prototype:** `.superpowers/brainstorm/4273-1778192382/content/hero-prototype-v11.html` (gitignored — preserved as the source of truth for the visual; this spec is authoritative for behavior + structure)
@@ -33,9 +33,9 @@ This **breaks** the original 2026-05-04 UI redesign lock that said "Domain: app-
 | **Style energy** | Cinematic + manifesto blend — primary feel is OpenAI/Anthropic homepage cinematic restraint, with an indie-hacker undertone via the eyebrow ("A personal tool. Open source. Free."), top utility bar, GitHub-star ghost CTA, and the Manifesto section. |
 | **Hero centerpiece** | Flat-facing browser-chrome frame with subtle ±2deg mouse parallax centered on 0deg. Two ambient drift orbs (violet top-right, azure bottom-left) breathing slowly. The frame contains a live, scripted demo of the application drafter that cycles through three tabs every 4.5s. |
 | **Page rhythm** | Hero → How It Works → Tracker Pipeline → Manifesto → Final CTA → Footer. No section eyebrows / numbering — section titles do the work alone. |
-| **Where it lives** | **Open question — see §10.** Best guess: replaces `/` with middleware redirect for authed users. |
-| **Auth handling** | **Open question — see §10.** Unauth visitors land on the marketing page; authed visitors get redirected to `/dashboard`. |
-| **README integration** | **Open question — see §10.** The locked brand-hero SVG embed remains; the Preview screenshots either stay as-is or get replaced with a single screenshot of the new landing. |
+| **Where it lives** | **Resolved (§10.1):** replaces `/` (root). Middleware redirects authed users on `/` to `/dashboard`; unauth visitors render the marketing page. |
+| **Auth handling** | **Resolved (§10.2):** unauth on `/` → marketing landing; authed on `/` → 302 to `/dashboard`. All other `(app)` route auth flows unchanged (still redirect unauth → `/login`). |
+| **README integration** | **Resolved (§10.3):** brand-hero SVG embed stays; add a single line beneath it linking to the deployed marketing URL ("Watch the live landing →"). Preview screenshot section stays as-is. |
 | **Hosting** | Same Vercel free-tier deploy as the existing app. No new infrastructure. |
 
 ---
@@ -385,30 +385,29 @@ For convenience, the spec captures all key dimensions, easings, and copy verbati
 
 ---
 
-## 10. Open questions (must be resolved before plan can run)
+## 10. Resolved decisions (formerly open questions)
 
-These were deferred during the brainstorm. They're scoping/technical decisions that affect implementation but don't change the visual direction.
+Resolved 2026-05-07 prior to writing-plans. The recommendations from the brainstorm were accepted as-is.
 
-1. **Where the page lives technically.** Three options:
-   - (a) **Replaces `/`** (root). Authed users get redirected to `/dashboard` via middleware. Cleanest URL but requires middleware changes.
-   - (b) **Sits at `/landing`** or `/welcome`. Existing `/` keeps redirecting authed→dashboard, unauth→login. Marketing page is reachable via README/external links only.
-   - (c) **Lives on a separate static export** at a different domain. Heavyweight; rejected unless (a) and (b) both have issues.
-   - **Recommendation:** (a) — the marketing landing IS the public face of the product, it should own `/`.
+1. **Where the page lives technically — RESOLVED: option (a) — replaces `/`.**
+   - The marketing landing owns `/` (root). Authed users hitting `/` get a 302 to `/dashboard` via middleware. Rejected (b) "/landing" — the marketing page is the public face of the product, it should own the canonical URL.
+   - Implementation note: requires either a new `apps/web/src/app/page.tsx` at the root that renders `<MarketingPage>`, or moving the existing root-route behavior. Verify how `/` is currently wired (likely a redirect to `/login` or `/dashboard`) and replace it with conditional render based on session.
 
-2. **Auth handling.** Current middleware in `apps/web/src/middleware.ts` redirects unauth → `/login` for any `(app)` route. New behavior:
-   - Unauth visitor on `/` → render the marketing landing
-   - Authed visitor on `/` → redirect to `/dashboard`
-   - All other auth flows unchanged
+2. **Auth handling — RESOLVED.** Current middleware in `apps/web/src/middleware.ts` redirects unauth → `/login` for any `(app)` route. New behavior:
+   - Unauth visitor on `/` → render the marketing landing (no redirect)
+   - Authed visitor on `/` → 302 to `/dashboard`
+   - All other `(app)` route auth flows unchanged (still redirect unauth → `/login`)
+   - Implementation note: middleware needs an explicit branch for the `/` route that checks the session cookie and redirects only when authed. The marketing page itself should be statically renderable with no session dependencies.
 
-3. **README integration.** Currently the README has the brand-hero SVG embed at top + a `## Preview` section with 6 app screenshots. Options:
-   - Keep both; add a small "Watch the live landing →" link below the brand hero pointing at the deployed URL
-   - Replace the 6-screenshot preview with a single screenshot of the new marketing landing
-   - Leave README as-is — landing speaks for itself once visitors arrive
-   - **Recommendation:** add a one-line link, keep everything else.
+3. **README integration — RESOLVED: add one-line link, keep everything else.**
+   - Brand-hero SVG embed at the top of README stays untouched
+   - Add a single line directly below the brand hero: a "Watch the live landing →" anchor pointing at the deployed marketing URL (e.g., `https://jobcopilot-web.vercel.app/`)
+   - The 6-screenshot Preview section stays as-is
+   - Implementation note: this is the smallest README change possible — one inserted line, no section restructuring.
 
-4. **Hosting.** No new infrastructure. Existing Vercel free-tier deploy that already serves the app will serve the marketing route. Confirm at implementation time that the marketing page doesn't blow Vercel's free-tier function or bandwidth limits — it shouldn't (it's static-generated, no server-side data, just CSS animations).
+4. **Hosting — confirmed (no decision needed).** No new infrastructure. Existing Vercel free-tier deploy that already serves the app will serve the marketing route. Confirm at implementation time that the marketing page doesn't blow Vercel's free-tier function or bandwidth limits — it shouldn't (it's static-generated, no server-side data, just CSS animations).
 
-5. **Brand hero SVG in the footer.** The footer brand mark is currently an inline SVG approximation. Better: import the existing `docs/assets/jobcopilot-brand.svg` brand mark or render a small version of the same `tileSvg` from `apps/web/scripts/build-brand-assets.ts`. Implementation decision, not visual.
+5. **Brand hero SVG in the footer — implementation decision, not visual.** The footer brand mark is currently an inline SVG approximation. Better: import the existing `docs/assets/jobcopilot-brand.svg` brand mark or render a small version of the same `tileSvg` from `apps/web/scripts/build-brand-assets.ts`. Decide during component build.
 
 ---
 
