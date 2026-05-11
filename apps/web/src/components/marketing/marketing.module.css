@@ -1,0 +1,22 @@
+/* Marketing-page keyframes. Page-scoped via CSS module class names so they
+   don't leak to the (app) routes. Reduced-motion is gated globally in
+   globals.css — animations decay there. */
+
+@keyframes drift1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(40px, -30px) scale(1.05); }
+}
+
+@keyframes drift2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-30px, 40px) scale(1.08); }
+}
+
+/* Reusable absolutely-positioned orb base. Component supplies size/color
+   inline; this class only carries the constants. */
+.driftOrb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+}
