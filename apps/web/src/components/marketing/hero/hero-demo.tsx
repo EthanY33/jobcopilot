@@ -39,12 +39,10 @@ export function HeroDemo() {
             <div className={styles.metaLine}>GOOGLE · APPLICATIONS ENGINEER</div>
             <h3 className={styles.appTitle}>Applications Engineer, YouTube Creator Partnerships</h3>
 
-            <div className={styles.tabsRow} role="tablist">
+            <div className={styles.tabsRow}>
               {TAB_LABELS.map((label, i) => (
                 <div
                   key={label}
-                  role="tab"
-                  aria-selected={i === ACTIVE_TAB_INDEX}
                   className={`${styles.tab} ${i === ACTIVE_TAB_INDEX ? styles.tabActive : ""}`}
                 >
                   {label}
