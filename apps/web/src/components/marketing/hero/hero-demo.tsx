@@ -24,7 +24,7 @@ export function HeroDemo() {
     let cycleStep = 0;
     const id = setInterval(() => {
       cycleStep = (cycleStep + 1) % CYCLE_INDICES.length;
-      setActiveIdx(CYCLE_INDICES[cycleStep]);
+      setActiveIdx(CYCLE_INDICES[cycleStep]!);
     }, 4500);
     return () => clearInterval(id);
   }, []);
