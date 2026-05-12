@@ -447,3 +447,70 @@
   color: #fff;
   white-space: nowrap;
 }
+
+.shipFrame {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 12px;
+  height: 110px;
+  background: rgba(13, 13, 18, 0.7);
+  border: 1px solid #1f1f28;
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.shipCol {
+  background: rgba(8, 8, 12, 0.5);
+  border-radius: 6px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shipColLabel {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #6a6a7a;
+}
+
+.shipCard {
+  background: rgba(36, 36, 46, 0.6);
+  border: 1px solid #25252e;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 9px;
+  color: #b4b4c4;
+}
+
+.shipCardDrafting {
+  animation: shipDrafting 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.shipCardApplied {
+  animation: shipApplied 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  border-color: hsl(258 90% 60%);
+}
+
+@keyframes shipDrafting {
+  0%, 35%   { opacity: 1; box-shadow: 0 0 14px rgba(155, 103, 238, 0.4) inset; }
+  50%, 75%  { opacity: 0.4; box-shadow: none; }
+  85%       { opacity: 0.4; box-shadow: none; }
+  100%      { opacity: 1; box-shadow: 0 0 14px rgba(155, 103, 238, 0.4) inset; }
+}
+
+@keyframes shipApplied {
+  0%, 35%   { opacity: 0; transform: scale(0.7); }
+  50%       { opacity: 1; transform: scale(1.06); box-shadow: 0 0 18px rgba(155, 103, 238, 0.55); }
+  60%, 80%  { opacity: 1; transform: scale(1); box-shadow: 0 0 12px rgba(155, 103, 238, 0.4); }
+  90%       { opacity: 0.4; transform: scale(0.96); box-shadow: none; }
+  100%      { opacity: 0; transform: scale(0.7); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shipCardDrafting, .shipCardApplied { animation: none; opacity: 1; }
+}
