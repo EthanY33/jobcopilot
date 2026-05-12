@@ -806,3 +806,59 @@
 @media (max-width: 1100px) {
   .kanbanGrid { grid-template-columns: repeat(2, 1fr); }
 }
+
+.trackerSection {
+  position: relative;
+  padding: 160px 32px 160px;
+  max-width: 1200px;
+  margin: 0 auto;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.trackerHeading {
+  text-align: center;
+  margin-bottom: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.statsStrip {
+  display: flex;
+  justify-content: center;
+  gap: 56px;
+  margin-bottom: 56px;
+  flex-wrap: wrap;
+}
+
+.statBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.statNumber {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 700;
+  font-size: 38px;
+  line-height: 1;
+  color: #f4f4f8;
+}
+
+.statNumberGradient {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.statLabel {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8a8a99;
+}
