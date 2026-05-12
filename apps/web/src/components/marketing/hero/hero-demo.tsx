@@ -21,6 +21,9 @@ export function HeroDemo() {
   const { transform, handlers } = useMouseParallax();
 
   useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
     let cycleStep = 0;
     const id = setInterval(() => {
       cycleStep = (cycleStep + 1) % CYCLE_INDICES.length;
