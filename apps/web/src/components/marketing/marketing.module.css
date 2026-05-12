@@ -721,3 +721,69 @@
 @media (prefers-reduced-motion: reduce) {
   .appCardRecent { animation: none; }
 }
+
+.kanbanCol {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 320px;
+}
+
+.kanbanColHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.kanbanColCount {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 9px;
+}
+
+.kanbanColBody {
+  background: rgba(8, 8, 12, 0.5);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  flex: 1;
+}
+
+.kanbanColBody::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 8px 8px 0 0;
+}
+
+.kanbanColWishlist     { color: hsl(220 15% 60%); }
+.kanbanColWishlist .kanbanColCount { color: hsl(220 15% 60%); }
+.kanbanColWishlist .kanbanColBody::before { background: linear-gradient(90deg, hsl(220 15% 50%), hsl(220 15% 35%)); }
+
+.kanbanColApplied      { color: hsl(258 90% 70%); }
+.kanbanColApplied .kanbanColCount { color: hsl(258 90% 70%); }
+.kanbanColApplied .kanbanColBody::before { background: linear-gradient(90deg, hsl(258 90% 60%), hsl(258 90% 45%)); }
+
+.kanbanColPhone        { color: hsl(215 95% 70%); }
+.kanbanColPhone .kanbanColCount { color: hsl(215 95% 70%); }
+.kanbanColPhone .kanbanColBody::before { background: linear-gradient(90deg, hsl(215 95% 60%), hsl(215 95% 40%)); }
+
+.kanbanColOnsite       { color: hsl(258 90% 70%); }
+.kanbanColOnsite .kanbanColCount { color: hsl(258 90% 70%); }
+.kanbanColOnsite .kanbanColBody::before { background: var(--gradient-brand); }
+
+.kanbanColOffer        { color: hsl(140 70% 60%); }
+.kanbanColOffer .kanbanColCount { color: hsl(140 70% 60%); }
+.kanbanColOffer .kanbanColBody::before { background: linear-gradient(90deg, hsl(140 70% 60%), hsl(140 70% 40%)); }
