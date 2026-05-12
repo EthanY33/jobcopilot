@@ -409,3 +409,41 @@
     opacity: 1; transform: none; animation: none;
   }
 }
+
+.howVisualFrame {
+  position: relative;
+  background: rgba(13, 13, 18, 0.7);
+  border: 1px solid #1f1f28;
+  border-radius: 10px;
+  padding: 18px;
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  backdrop-filter: blur(12px);
+}
+
+.pasteUrl {
+  flex: 1;
+  background: #08080c;
+  border: 1px solid #25252e;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 11px;
+  color: #6a6a7a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pasteCta {
+  background: var(--gradient-brand);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  color: #fff;
+  white-space: nowrap;
+}
