@@ -862,3 +862,126 @@
   text-transform: uppercase;
   color: #8a8a99;
 }
+
+.manifestoSection {
+  position: relative;
+  padding: 180px 32px 160px;
+  max-width: 720px;
+  margin: 0 auto;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.manifestoH2 {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 700;
+  font-size: clamp(44px, 6.5vw, 76px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: #f4f4f8;
+  margin: 0 0 40px;
+  text-align: left;
+}
+
+.manifestoBody {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.manifestoP {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 21px;
+  line-height: 1.65;
+  color: #d4d4dc;
+  margin: 0;
+}
+
+.manifestoHighlight {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-style: italic;
+}
+
+.specsStrip {
+  margin-top: 56px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  background: rgba(13, 13, 18, 0.6);
+  border: 1px solid #1f1f28;
+  border-radius: 12px;
+  padding: 24px;
+  backdrop-filter: blur(12px);
+}
+
+.specBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.specLabel {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #6a6a7a;
+}
+
+.specValue {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: #f4f4f8;
+}
+
+.specValueGradient {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.byline {
+  margin-top: 56px;
+  padding-top: 32px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bylineAvatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--gradient-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: #fff;
+}
+
+.bylineName {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #f4f4f8;
+}
+
+.bylineHandle {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #6a6a7a;
+}
+
+@media (max-width: 768px) {
+  .specsStrip { grid-template-columns: repeat(2, 1fr); }
+}
