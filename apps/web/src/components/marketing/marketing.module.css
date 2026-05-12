@@ -301,3 +301,111 @@
   background: hsl(140 70% 50%);
   box-shadow: 0 0 8px hsl(140 70% 50%);
 }
+
+.heroSection {
+  position: relative;
+  min-height: 100vh;
+  padding: 120px 32px 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.heroInner {
+  max-width: 1200px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 28px;
+  position: relative;
+  z-index: 1;
+}
+
+.heroEyebrow {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #8a8a99;
+  opacity: 0;
+  animation: heroFadeIn 1.2s 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.heroH1 {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 700;
+  font-size: clamp(48px, 8vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+  color: #f4f4f8;
+  margin: 0;
+  opacity: 0;
+  transform: translateY(24px);
+  animation: heroRise 1.4s 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.heroH1Gradient {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.heroLede {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 19px;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  color: #b4b4c4;
+  max-width: 640px;
+  opacity: 0;
+  animation: heroFadeIn 1s 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.ledePill {
+  display: inline-block;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 13px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: rgba(155, 103, 238, 0.14);
+  border: 1px solid rgba(155, 103, 238, 0.3);
+  color: hsl(258 90% 78%);
+  margin: 0 2px;
+  vertical-align: 1px;
+}
+
+.heroCtas {
+  display: flex;
+  gap: 12px;
+  opacity: 0;
+  animation: heroFadeIn 1s 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.heroFrameWrap {
+  width: 100%;
+  margin-top: 24px;
+  opacity: 0;
+  transform: translateY(24px);
+  animation: heroRise 1.4s 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+@keyframes heroFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes heroRise {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroEyebrow, .heroH1, .heroLede, .heroCtas, .heroFrameWrap {
+    opacity: 1; transform: none; animation: none;
+  }
+}
