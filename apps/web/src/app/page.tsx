@@ -1,9 +1,5 @@
-import { redirect } from "next/navigation";
-import { getServerSupabase } from "@/lib/supabase/server";
+import { MarketingPage } from "@/components/marketing/marketing-page";
 
-export default async function Home() {
-  const supabase = getServerSupabase();
-  const { data } = await supabase.auth.getUser();
-  if (data.user) redirect("/dashboard");
-  redirect("/login");
+export default function Home() {
+  return <MarketingPage />;
 }
