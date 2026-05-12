@@ -48,5 +48,11 @@ export async function updateSession(request: NextRequest) {
     return redirectWithCookies(response, url);
   }
 
+  if (pathname === "/" && data.user) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return redirectWithCookies(response, url);
+  }
+
   return response;
 }
