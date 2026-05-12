@@ -514,3 +514,47 @@
 @media (prefers-reduced-motion: reduce) {
   .shipCardDrafting, .shipCardApplied { animation: none; opacity: 1; }
 }
+
+.howStep {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+
+.howNumber {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--gradient-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  color: #fff;
+  box-shadow:
+    0 0 0 8px rgba(13, 13, 18, 1),
+    0 0 0 9px #1f1f28,
+    0 0 24px rgba(155, 103, 238, 0.4);
+  z-index: 2;
+}
+
+.howStepTitle {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  color: #f4f4f8;
+  margin: 0;
+}
+
+.howStepDesc {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 16px;
+  line-height: 1.65;
+  color: #b4b4c4;
+  margin: 0;
+}
