@@ -787,3 +787,22 @@
 .kanbanColOffer        { color: hsl(140 70% 60%); }
 .kanbanColOffer .kanbanColCount { color: hsl(140 70% 60%); }
 .kanbanColOffer .kanbanColBody::before { background: linear-gradient(90deg, hsl(140 70% 60%), hsl(140 70% 40%)); }
+
+.kanbanFrame {
+  background: #0d0d12;
+  border: 1px solid #25252e;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.6);
+}
+
+.kanbanGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  padding: 18px;
+}
+
+@media (max-width: 1100px) {
+  .kanbanGrid { grid-template-columns: repeat(2, 1fr); }
+}
