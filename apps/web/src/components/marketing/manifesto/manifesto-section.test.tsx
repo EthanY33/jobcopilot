@@ -1,22 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import { ManifestoSection } from "./manifesto-section";
-
-beforeEach(() => {
-  vi.stubGlobal(
-    "IntersectionObserver",
-    class {
-      observe = vi.fn();
-      disconnect = vi.fn();
-      unobserve = vi.fn();
-      takeRecords = () => [];
-      root = null;
-      rootMargin = "";
-      thresholds = [];
-      constructor(_cb: unknown) {}
-    },
-  );
-});
 
 describe("ManifestoSection (locked copy)", () => {
   it("renders the H2 with gradient clause", () => {

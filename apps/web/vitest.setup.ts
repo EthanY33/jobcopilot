@@ -15,3 +15,22 @@ if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
     }),
   });
 }
+
+// jsdom does not implement IntersectionObserver, which ScrollReveal uses
+// on mount. Provide a no-op shim so section tests can render. Tests that
+// need to control the observer (e.g. scroll-reveal.test.tsx) override this
+// with vi.stubGlobal in their own beforeEach.
+if (typeof globalThis.IntersectionObserver === "undefined") {
+  class NoopIntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+    root = null;
+    rootMargin = "";
+    thresholds: readonly number[] = [];
+  }
+  globalThis.IntersectionObserver = NoopIntersectionObserver as unknown as typeof IntersectionObserver;
+}
