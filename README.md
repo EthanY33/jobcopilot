@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/jobcopilot-brand.svg" alt="JobCopilot — AI drafts every piece of an application. You review and ship." width="100%">
+  <img src="docs/assets/jobcopilot-brand.svg" alt="JobCopilot: AI drafts every piece of an application. You review and ship." width="100%">
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@ Personal AI-assisted job application tool. AI drafts every piece of an applicati
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/screenshots/tracker.png" alt="Tracker — kanban view of applications grouped by status"></td>
+    <td width="50%"><img src="docs/assets/screenshots/tracker.png" alt="Tracker: kanban view of applications grouped by status"></td>
     <td width="50%"><img src="docs/assets/screenshots/application.png" alt="Application detail with Overview, Cover Letter, Resume, Answers, and Timeline tabs"></td>
   </tr>
   <tr>
@@ -30,7 +30,7 @@ Personal AI-assisted job application tool. AI drafts every piece of an applicati
     <td align="center"><sub><strong>Profile</strong> · resume-parsed skills + contact</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/assets/screenshots/variants.png" alt="Resume variants — keyword-biased clones of the Base resume"></td>
+    <td width="50%"><img src="docs/assets/screenshots/variants.png" alt="Resume variants: keyword-biased clones of the Base resume"></td>
     <td width="50%"><img src="docs/assets/screenshots/login.png" alt="Login with Continue-with-Google and Continue-with-GitHub buttons"></td>
   </tr>
   <tr>
@@ -59,10 +59,10 @@ Sign in with Google or GitHub.
 
 ## Monorepo layout
 
-- `apps/web` — Next.js 14 web app
-- `packages/db` — Prisma schema + Supabase RLS policies
-- `packages/shared` — shared types + Zod schemas
-- `packages/prompts` — Claude prompt templates + eval harness
+- `apps/web`: Next.js 14 web app
+- `packages/db`: Prisma schema + Supabase RLS policies
+- `packages/shared`: shared types + Zod schemas
+- `packages/prompts`: Claude prompt templates + eval harness
 
 ## Tests
 
