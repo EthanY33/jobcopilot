@@ -22,6 +22,9 @@ pnpm dev                                        # apps/web on :3000
 
 pnpm test                                       # vitest unit + integration
 pnpm test:e2e                                   # playwright e2e (auto-starts dev w/ mocks)
+pnpm lint                                       # turbo run lint across workspaces
+pnpm typecheck                                  # tsc across workspaces
+pnpm -F @jobcopilot/db generate                 # regen Prisma client after schema edits
 pnpm -F @jobcopilot/prompts eval                # prompt regression harness
 ```
 
@@ -67,6 +70,10 @@ Layered planning system:
 
 Hosted on Vercel (`jobcopilot.vercel.app`). Read `docs/DEPLOY.md` before any deploy advice. **Don't run deploys from this session** without explicit user confirmation.
 
+## marketing/ (untracked trailer assets)
+
+`marketing/` at repo root holds trailer video builds (`*.mp4` gitignored) and `trailer-build-scaffold/`. This is NOT the marketing landing page — that lives in `apps/web` (route `/`, unauthenticated). Don't commit the mp4s.
+
 ## CI / verification
 
 **There is no `.github/workflows/` directory.** Vercel catches build failures on push; `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `pnpm -F @jobcopilot/prompts eval` are **local-only** gates. Run them before pushing anything portfolio-visible. The prompt eval is especially load-bearing — a regression there ships silently.
@@ -77,5 +84,5 @@ Supabase RLS policies live in `packages/db` and are version-controlled. **Schema
 
 ## Stack discipline
 
-- Tailwind + shadcn/ui for components — use existing primitives, don't introduce new component libraries. shadcn config is at `apps/web/components.json`; add components via `pnpm dlx shadcn-ui@latest add <name>` from the `apps/web/` dir.
+- Tailwind + shadcn/ui for components — use existing primitives, don't introduce new component libraries. shadcn config is at `apps/web/components.json`; add components via `pnpm dlx shadcn@latest add <name>` from the `apps/web/` dir (the old `shadcn-ui` CLI is deprecated and will not work).
 - Zod schemas in `packages/shared` are the contract between client and server. Edit there, not at call sites.
