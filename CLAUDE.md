@@ -1,6 +1,6 @@
-# CLAUDE.md — jobcopilot project memory
+# jobcopilot project memory
 
-Personal AI-assisted job-application tool. **Not a multi-tenant SaaS** — this is Ethan's tool that he uses himself. Next.js 14 + TypeScript + Supabase + Prisma + Claude API. pnpm monorepo.
+Personal AI-assisted job-application tool. **Not a multi-tenant SaaS.** This is Ethan's tool that he uses himself. Next.js 14 + TypeScript + Supabase + Prisma + Claude API. pnpm monorepo.
 
 ## Monorepo layout
 
@@ -32,7 +32,7 @@ pnpm -F @jobcopilot/prompts eval                # prompt regression harness
 
 ## TypeScript
 
-`tsconfig.base.json` is strict-plus: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`. Practical effect — `arr[i]` types as `T | undefined`; nullish-check before use. Match the existing pattern, don't fight it.
+`tsconfig.base.json` is strict-plus: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`. In practice, `arr[i]` types as `T | undefined`; nullish-check before use. Match the existing pattern, don't fight it.
 
 ## Required env
 
@@ -41,7 +41,7 @@ pnpm -F @jobcopilot/prompts eval                # prompt regression harness
 - Supabase: URL + anon key + service-role key
 - Anthropic API key
 
-Vanilla `npm install` will not work — pnpm is the only supported manager.
+Vanilla `npm install` will not work (pnpm is the only supported manager).
 
 ## Auth model
 
@@ -49,22 +49,22 @@ OAuth-only. Google + GitHub. **No email/password.** Don't add it without spec ch
 
 ## Routing
 
-Auth-aware redirects live in `apps/web/src/middleware.ts`. Authenticated users on `/` redirect to `/dashboard`; the unauthenticated `/` is the marketing landing. Don't add auth checks inside route components — keep auth-routing centralized in middleware.
+Auth-aware redirects live in `apps/web/src/middleware.ts` (delegates to `lib/supabase/middleware.ts`). Authenticated users on `/` redirect to `/dashboard`; the unauthenticated `/` is the marketing landing. Don't add auth checks inside route components. Keep auth-routing centralized in middleware.
 
 ## Where pending work is tracked
 
 Layered planning system:
 
-- **Specs** (high-level designs): `docs/specs/*.md` — current set covers original design, BYO multi-provider AI, UI redesign, marketing landing.
-- **Plans** (sequenced work breakdown): `docs/plans/*.md` — phase1, byo-anthropic-phase-2a, ui-redesign.
-- **Directives** (active execution): `docs/directives/*.md` — what's actually being worked on right now.
-- **Superpowers plans**: `docs/superpowers/plans/` — long-form plans authored via the superpowers workflow.
+- **Specs** (high-level designs): `docs/specs/*.md` (current set covers original design, BYO multi-provider AI, UI redesign, marketing landing).
+- **Plans** (sequenced work breakdown): `docs/plans/*.md` (phase1, byo-anthropic-phase-2a, ui-redesign).
+- **Directives** (active execution): `docs/directives/*.md` (what's actually being worked on right now).
+- **Superpowers plans**: `docs/superpowers/plans/` (long-form plans authored via the superpowers workflow).
 
 **Always read the latest dated file in each subfolder before changing direction.**
 
 ## Scheduled tasks lock
 
-`.claude/scheduled_tasks.lock` exists — something runs on a recurring schedule. Check before launching new background work or scheduling a competing task.
+`.claude/scheduled_tasks.lock` exists. Something runs on a recurring schedule. Check before launching new background work or scheduling a competing task.
 
 ## Deploy
 
@@ -72,17 +72,17 @@ Hosted on Vercel (`jobcopilot.vercel.app`). Read `docs/DEPLOY.md` before any dep
 
 ## marketing/ (untracked trailer assets)
 
-`marketing/` at repo root holds trailer video builds (`*.mp4` gitignored) and `trailer-build-scaffold/`. This is NOT the marketing landing page — that lives in `apps/web` (route `/`, unauthenticated). Don't commit the mp4s.
+`marketing/` at repo root holds trailer video builds (`*.mp4` gitignored) and `trailer-build-scaffold/`. This is NOT the marketing landing page (that lives in `apps/web`, route `/`, unauthenticated). Don't commit the mp4s.
 
 ## CI / verification
 
-**There is no `.github/workflows/` directory.** Vercel catches build failures on push; `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `pnpm -F @jobcopilot/prompts eval` are **local-only** gates. Run them before pushing anything portfolio-visible. The prompt eval is especially load-bearing — a regression there ships silently.
+**There is no `.github/workflows/` directory.** Vercel catches build failures on push; `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `pnpm -F @jobcopilot/prompts eval` are **local-only** gates. Run them before pushing anything portfolio-visible. The prompt eval is especially load-bearing (a regression there ships silently).
 
 ## RLS / data
 
-Supabase RLS policies live in `packages/db` and are version-controlled. **Schema and policy changes are coupled** — `db:push` + `apply:policies` must run together. Don't edit policies in the Supabase dashboard; they'll drift.
+Supabase RLS policies live in `packages/db` and are version-controlled. **Schema and policy changes are coupled.** `db:push` + `apply:policies` must run together. Don't edit policies in the Supabase dashboard; they'll drift.
 
 ## Stack discipline
 
-- Tailwind + shadcn/ui for components — use existing primitives, don't introduce new component libraries. shadcn config is at `apps/web/components.json`; add components via `pnpm dlx shadcn@latest add <name>` from the `apps/web/` dir (the old `shadcn-ui` CLI is deprecated and will not work).
+- Tailwind + shadcn/ui for components. Use existing primitives, don't introduce new component libraries. shadcn config is at `apps/web/components.json`; add components via `pnpm dlx shadcn@latest add <name>` from the `apps/web/` dir (the old `shadcn-ui` CLI is deprecated and will not work).
 - Zod schemas in `packages/shared` are the contract between client and server. Edit there, not at call sites.
