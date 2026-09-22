@@ -1,88 +1,40 @@
-# jobcopilot project memory
+# jobcopilot
 
-Personal AI-assisted job-application tool. **Not a multi-tenant SaaS.** This is Ethan's tool that he uses himself. Next.js 14 + TypeScript + Supabase + Prisma + Claude API. pnpm monorepo.
+Ethan's personal AI-assisted job-application tool, **not multi-tenant SaaS**. Next.js 14 (App Router) + TypeScript + Supabase + Prisma + Claude API, pnpm monorepo: `apps/web` (Next app), `packages/db` (Prisma schema + Supabase RLS policies), `packages/shared` (types + Zod schemas), `packages/prompts` (Claude prompt templates + eval harness).
 
-## Monorepo layout
+## Setup
+- Node 20 LTS (enforced). pnpm only, via Corepack (version pinned in root `package.json`); `npm install` won't work.
+- `cp .env.example .env`: Supabase URL + anon key + service-role key, Anthropic API key.
 
+## Commands
 ```
-apps/web                    # Next.js 14 app (App Router)
-packages/db                 # Prisma schema + Supabase RLS policies
-packages/shared             # shared types + Zod schemas
-packages/prompts            # Claude prompt templates + eval harness
-```
-
-## Build / test commands
-
-```
-pnpm install                                    # Corepack pins pnpm version
-cp .env.example .env                            # Supabase + Anthropic keys
-pnpm -F @jobcopilot/db db:push                  # push schema to Supabase
-pnpm -F @jobcopilot/db apply:policies           # apply RLS policies
-pnpm dev                                        # apps/web on :3000
-
-pnpm test                                       # vitest unit + integration
-pnpm test:e2e                                   # playwright e2e (auto-starts dev w/ mocks)
-pnpm lint                                       # turbo run lint across workspaces
-pnpm typecheck                                  # tsc across workspaces
-pnpm -F @jobcopilot/db generate                 # regen Prisma client after schema edits
-pnpm -F @jobcopilot/prompts eval                # prompt regression harness
+pnpm install
+pnpm -F @jobcopilot/db db:push          # push schema to Supabase
+pnpm -F @jobcopilot/db apply:policies   # apply RLS policies
+pnpm -F @jobcopilot/db generate         # regen Prisma client after schema edits
+pnpm dev                                # apps/web on :3000
+pnpm test                               # vitest unit + integration
+pnpm test:e2e                           # playwright e2e (auto-starts dev w/ mocks)
+pnpm lint / pnpm typecheck              # turbo lint / tsc across workspaces
+pnpm -F @jobcopilot/prompts eval        # prompt regression harness
 ```
 
-**Don't change prompt templates without running the eval harness.** It exists to catch regressions before they ship.
+## Verification
+- No `.github/workflows/`; Vercel only catches build failures on push. `typecheck`, `test`, `test:e2e`, prompts `eval` are local-only gates: run them before pushing anything portfolio-visible.
+- **Never change prompt templates without running the eval**; a regression there ships silently.
 
-## TypeScript
+## Rules
+- TS is strict-plus (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`): `arr[i]` is `T | undefined`, nullish-check before use. Match existing patterns.
+- Auth: OAuth only (Google, GitHub). **No email/password** without a spec change.
+- Auth routing stays centralized in `apps/web/src/middleware.ts` (delegates to `lib/supabase/middleware.ts`): signed-in `/` redirects to `/dashboard`, signed-out `/` is the marketing landing. No auth checks in route components.
+- RLS policies are version-controlled in `packages/db`. Schema and policy changes are coupled: run `db:push` + `apply:policies` together. Never edit policies in the Supabase dashboard (drift).
+- UI: Tailwind + shadcn/ui primitives only, no new component libraries. Add components from `apps/web/` via `pnpm dlx shadcn@latest add <name>` (config `apps/web/components.json`; old `shadcn-ui` CLI is deprecated and won't work).
+- Zod schemas in `packages/shared` are the client/server contract; edit there, not at call sites.
 
-`tsconfig.base.json` is strict-plus: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`. In practice, `arr[i]` types as `T | undefined`; nullish-check before use. Match the existing pattern, don't fight it.
+## Planning docs
+Read the latest dated file in each before changing direction: `docs/specs/` (designs: original, BYO multi-provider AI, UI redesign, marketing landing), `docs/plans/` (sequenced breakdowns: phase1, byo-anthropic-phase-2a, ui-redesign), `docs/directives/` (active execution), `docs/superpowers/plans/` (superpowers-workflow long-form plans).
 
-## Required env
-
-- Node 20 LTS (enforced)
-- pnpm via Corepack (version pinned in root `package.json`)
-- Supabase: URL + anon key + service-role key
-- Anthropic API key
-
-Vanilla `npm install` will not work (pnpm is the only supported manager).
-
-## Auth model
-
-OAuth-only. Google + GitHub. **No email/password.** Don't add it without spec change.
-
-## Routing
-
-Auth-aware redirects live in `apps/web/src/middleware.ts` (delegates to `lib/supabase/middleware.ts`). Authenticated users on `/` redirect to `/dashboard`; the unauthenticated `/` is the marketing landing. Don't add auth checks inside route components. Keep auth-routing centralized in middleware.
-
-## Where pending work is tracked
-
-Layered planning system:
-
-- **Specs** (high-level designs): `docs/specs/*.md` (current set covers original design, BYO multi-provider AI, UI redesign, marketing landing).
-- **Plans** (sequenced work breakdown): `docs/plans/*.md` (phase1, byo-anthropic-phase-2a, ui-redesign).
-- **Directives** (active execution): `docs/directives/*.md` (what's actually being worked on right now).
-- **Superpowers plans**: `docs/superpowers/plans/` (long-form plans authored via the superpowers workflow).
-
-**Always read the latest dated file in each subfolder before changing direction.**
-
-## Scheduled tasks lock
-
-`.claude/scheduled_tasks.lock` exists. Something runs on a recurring schedule. Check before launching new background work or scheduling a competing task.
-
-## Deploy
-
-Hosted on Vercel (`jobcopilot.vercel.app`). Read `docs/DEPLOY.md` before any deploy advice. **Don't run deploys from this session** without explicit user confirmation.
-
-## marketing/ (untracked trailer assets)
-
-`marketing/` at repo root holds trailer video builds (`*.mp4` gitignored) and `trailer-build-scaffold/`. This is NOT the marketing landing page (that lives in `apps/web`, route `/`, unauthenticated). Don't commit the mp4s.
-
-## CI / verification
-
-**There is no `.github/workflows/` directory.** Vercel catches build failures on push; `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `pnpm -F @jobcopilot/prompts eval` are **local-only** gates. Run them before pushing anything portfolio-visible. The prompt eval is especially load-bearing (a regression there ships silently).
-
-## RLS / data
-
-Supabase RLS policies live in `packages/db` and are version-controlled. **Schema and policy changes are coupled.** `db:push` + `apply:policies` must run together. Don't edit policies in the Supabase dashboard; they'll drift.
-
-## Stack discipline
-
-- Tailwind + shadcn/ui for components. Use existing primitives, don't introduce new component libraries. shadcn config is at `apps/web/components.json`; add components via `pnpm dlx shadcn@latest add <name>` from the `apps/web/` dir (the old `shadcn-ui` CLI is deprecated and will not work).
-- Zod schemas in `packages/shared` are the contract between client and server. Edit there, not at call sites.
+## Other
+- `.claude/scheduled_tasks.lock` exists: something runs on a schedule. Check before launching background work or scheduling a competing task.
+- Deploy: Vercel (`jobcopilot.vercel.app`). Read `docs/DEPLOY.md` before any deploy advice. **Don't deploy from a session without explicit user confirmation.**
+- `marketing/` (repo root, untracked): trailer builds (`*.mp4` gitignored, never commit) and `trailer-build-scaffold/`. Not the marketing landing page (that's `apps/web` route `/`).
