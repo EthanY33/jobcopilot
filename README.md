@@ -2,10 +2,6 @@
   <img src="docs/assets/jobcopilot-brand.svg" alt="JobCopilot: AI drafts every piece of an application. You review and ship." width="100%">
 </p>
 
-<p align="center">
-  <a href="https://jobcopilot.vercel.app/">Watch the live landing →</a>
-</p>
-
 # JobCopilot
 
 Personal AI-assisted job application tool. AI drafts every piece of an application (cover letter, resume bullet tweaks, free-text answers); the human reviews and submits. See `docs/specs/2026-04-14-job-hunt-copilot-design.md` for the full design.

@@ -36,5 +36,5 @@ Read the latest dated file in each before changing direction: `docs/specs/` (des
 
 ## Other
 - `.claude/scheduled_tasks.lock` exists: something runs on a schedule. Check before launching background work or scheduling a competing task.
-- Deploy: Vercel (`jobcopilot.vercel.app`). Read `docs/DEPLOY.md` before any deploy advice. **Don't deploy from a session without explicit user confirmation.**
+- Deploy: Vercel (not deployed yet; no production URL). Read `docs/DEPLOY.md` before any deploy advice. **Don't deploy from a session without explicit user confirmation.**
 - `marketing/` (repo root, untracked): trailer builds (`*.mp4` gitignored, never commit) and `trailer-build-scaffold/`. Not the marketing landing page (that's `apps/web` route `/`).
