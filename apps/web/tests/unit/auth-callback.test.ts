@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const auth = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
@@ -45,6 +45,13 @@ beforeEach(() => {
     error: null,
   });
   auth.signOut.mockResolvedValue({ error: null });
+  // No allowlist: outside production every signed-in email is accepted.
+  vi.stubEnv("AUTH_ALLOWED_EMAILS", "");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 describe("GET /api/auth/callback next parameter", () => {
@@ -91,5 +98,42 @@ describe("GET /api/auth/callback without a session", () => {
     const res = await callback("?code=bad&next=/tracker");
     const target = location(res);
     expect(target.pathname + target.search).toBe("/login?error=auth_failed");
+  });
+});
+
+describe("GET /api/auth/callback sign-in allowlist", () => {
+  function signedInAs(email: string) {
+    auth.exchangeCodeForSession.mockResolvedValue({
+      data: { user: { id: "u2", email }, session: {} },
+      error: null,
+    });
+  }
+
+  it("signs out an email that is not on the list and shows the login message", async () => {
+    vi.stubEnv("AUTH_ALLOWED_EMAILS", "owner@example.com");
+    signedInAs("stranger@example.com");
+    const res = await callback("?code=ok&next=/tracker");
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
+    const target = location(res);
+    expect(target.origin).toBe(ORIGIN);
+    expect(target.pathname + target.search).toBe("/login?error=not_allowed");
+  });
+
+  it("lets a listed email through, ignoring case", async () => {
+    vi.stubEnv("AUTH_ALLOWED_EMAILS", "second@example.com, Owner@Example.com");
+    signedInAs("owner@example.com");
+    const res = await callback("?code=ok");
+    expect(auth.signOut).not.toHaveBeenCalled();
+    expect(location(res).href).toBe(`${ORIGIN}/dashboard`);
+  });
+
+  it("denies everyone in production when the list is not set", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("NODE_ENV", "production");
+    signedInAs("owner@example.com");
+    const res = await callback("?code=ok");
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
+    const target = location(res);
+    expect(target.pathname + target.search).toBe("/login?error=not_allowed");
   });
 });

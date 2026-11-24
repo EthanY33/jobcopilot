@@ -5,8 +5,9 @@ import { Lockup } from "@/components/brand/lockup";
 import { OrbBackground } from "@/components/brand/orb-background";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
-// Messages for the ?error= codes set by /api/auth/callback.
+// Messages for the ?error= codes set by /api/auth/callback and the middleware.
 function errorMessage(code: string | string[] | undefined): string | null {
+  if (code === "not_allowed") return "This account is not allowed to sign in.";
   if (code === "auth_failed") return "Sign-in did not complete. Please try again.";
   return null;
 }

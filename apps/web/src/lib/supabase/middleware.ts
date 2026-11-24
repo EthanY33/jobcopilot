@@ -1,14 +1,19 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isEmailAllowed } from "@/lib/auth/allowlist";
 
 // Copy whole cookies, not just name and value: a refreshed session cookie
-// must keep its Path, SameSite and Max-Age on the redirect too.
-function redirectWithCookies(response: NextResponse, target: URL): NextResponse {
-  const redirect = NextResponse.redirect(target);
-  response.cookies.getAll().forEach((cookie) => {
-    redirect.cookies.set(cookie);
+// must keep its Path, SameSite and Max-Age on every response that replaces
+// the pass-through one.
+function withCookies(from: NextResponse, to: NextResponse): NextResponse {
+  from.cookies.getAll().forEach((cookie) => {
+    to.cookies.set(cookie);
   });
-  return redirect;
+  return to;
+}
+
+function redirectWithCookies(response: NextResponse, target: URL): NextResponse {
+  return withCookies(response, NextResponse.redirect(target));
 }
 
 export async function updateSession(request: NextRequest) {
@@ -36,6 +41,21 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+
+  // A signed-in account that is not on the allowlist gets no app access: 403
+  // for the API, the login page with a message for everything else. "/" and
+  // "/login" are served as they are to a signed-out visitor.
+  if (data.user && !isEmailAllowed(data.user.email)) {
+    if (pathname.startsWith("/api/")) {
+      return withCookies(response, NextResponse.json({ error: "not_allowed" }, { status: 403 }));
+    }
+    if (pathname === "/" || pathname === "/login") return response;
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "?error=not_allowed";
+    return redirectWithCookies(response, url);
+  }
+
   const isAuthedPath = pathname.startsWith("/dashboard")
     || pathname.startsWith("/tracker")
     || pathname.startsWith("/applications")

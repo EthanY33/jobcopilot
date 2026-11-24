@@ -92,11 +92,14 @@ function accessTokenIn(cookieHeader: string | null): string {
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL);
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+  // No allowlist: outside production every signed-in email is accepted.
+  vi.stubEnv("AUTH_ALLOWED_EMAILS", "");
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("middleware session refresh", () => {
@@ -214,5 +217,92 @@ describe("middleware cross-site write check", () => {
       }),
     );
     expect(res.status).toBe(200);
+  });
+});
+
+describe("middleware sign-in allowlist", () => {
+  const STRANGER = { ...OWNER, id: "user-2", email: "stranger@example.com" };
+  const validSession = () => sessionCookie(nowSeconds() + 3600);
+
+  function loginTarget(res: Response): string {
+    const target = new URL(res.headers.get("location") ?? "");
+    expect(target.origin).toBe(ORIGIN);
+    return target.pathname + target.search;
+  }
+
+  describe("with a signed-in email that is not on the list", () => {
+    beforeEach(() => {
+      vi.stubEnv("AUTH_ALLOWED_EMAILS", "owner@example.com");
+      stubGoTrue(STRANGER);
+    });
+
+    it.each(["/dashboard", "/tracker", "/applications/abc", "/profile", "/variants"])(
+      "redirects %s to the login page with the not_allowed message",
+      async (path) => {
+        const res = await middleware(request(path, { headers: { cookie: validSession() } }));
+        expect(res.status).toBe(307);
+        expect(loginTarget(res)).toBe("/login?error=not_allowed");
+      },
+    );
+
+    it("answers an API read with 403 JSON", async () => {
+      const res = await middleware(request("/api/variants", { headers: { cookie: validSession() } }));
+      expect(res.status).toBe(403);
+      expect(res.headers.get("x-middleware-next")).toBeNull();
+      expect(await res.json()).toEqual({ error: "not_allowed" });
+    });
+
+    it("answers a same-origin API write with 403 before the handler can spend the Anthropic key", async () => {
+      const res = await middleware(
+        request("/api/profile/parse-resume", {
+          method: "POST",
+          headers: { origin: ORIGIN, host: "localhost:3000", cookie: validSession() },
+        }),
+      );
+      expect(res.status).toBe(403);
+      expect(res.headers.get("x-middleware-next")).toBeNull();
+    });
+
+    it.each(["/", "/login"])("serves %s like a signed-out visit instead of redirecting", async (path) => {
+      const res = await middleware(request(path, { headers: { cookie: validSession() } }));
+      expect(res.status).toBe(200);
+      expect(res.headers.get("x-middleware-next")).toBe("1");
+      expect(res.headers.get("location")).toBeNull();
+    });
+
+    it("keeps the refreshed cookie attributes on the denial redirect", async () => {
+      const res = await middleware(request("/dashboard", { headers: { cookie: expiredSession() } }));
+      expect(loginTarget(res)).toBe("/login?error=not_allowed");
+      expect(authCookieHeader(res)).toMatch(/;\s*SameSite=lax/i);
+    });
+  });
+
+  it("lets a listed email through, ignoring case", async () => {
+    vi.stubEnv("AUTH_ALLOWED_EMAILS", "second@example.com, OWNER@example.com");
+    stubGoTrue();
+    const page = await middleware(request("/dashboard", { headers: { cookie: validSession() } }));
+    expect(page.headers.get("x-middleware-next")).toBe("1");
+    const api = await middleware(request("/api/variants", { headers: { cookie: validSession() } }));
+    expect(api.status).toBe(200);
+    const root = await middleware(request("/", { headers: { cookie: validSession() } }));
+    expect(loginTarget(root)).toBe("/dashboard");
+  });
+
+  it("denies every signed-in user in production when the list is not set", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AUTH_ALLOWED_EMAILS", "");
+    stubGoTrue();
+    const page = await middleware(request("/dashboard", { headers: { cookie: validSession() } }));
+    expect(loginTarget(page)).toBe("/login?error=not_allowed");
+    const api = await middleware(request("/api/variants", { headers: { cookie: validSession() } }));
+    expect(api.status).toBe(403);
+  });
+
+  it("still sends a signed-out visitor to the plain login page", async () => {
+    vi.stubEnv("AUTH_ALLOWED_EMAILS", "owner@example.com");
+    stubGoTrue();
+    const res = await middleware(request("/dashboard"));
+    expect(loginTarget(res)).toBe("/login");
   });
 });

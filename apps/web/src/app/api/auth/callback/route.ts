@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isEmailAllowed } from "@/lib/auth/allowlist";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 // The URL parser reads "\" as "/" and drops tab, CR and LF, so "/\host" and
@@ -43,6 +44,12 @@ export async function GET(request: Request) {
   const supabase = getServerSupabase();
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error || !data.user) return loginError(url.origin, "auth_failed");
+
+  if (!isEmailAllowed(data.user.email)) {
+    // The exchange already created a session; end it before turning the user away.
+    await supabase.auth.signOut();
+    return loginError(url.origin, "not_allowed");
+  }
 
   return NextResponse.redirect(safeNextUrl(url.searchParams.get("next"), url.origin));
 }

@@ -20,6 +20,11 @@ describe("LoginPage error message", () => {
     );
   });
 
+  it("tells the user when the account is not on the allowlist", () => {
+    render(<LoginPage searchParams={{ error: "not_allowed" }} />);
+    expect(screen.getByRole("alert").textContent).toBe("This account is not allowed to sign in.");
+  });
+
   it("ignores error codes it does not know", () => {
     render(<LoginPage searchParams={{ error: "constructor" }} />);
     expect(screen.queryByRole("alert")).toBeNull();
