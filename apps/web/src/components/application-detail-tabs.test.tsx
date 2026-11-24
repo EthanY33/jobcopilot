@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { z } from "zod";
+import { contactSchema } from "@jobcopilot/shared";
 import { ApplicationDetailTabs } from "./application-detail-tabs";
+
+const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
 vi.mock("./cover-letter-drafter", () => ({ CoverLetterDrafter: () => null }));
 vi.mock("./bullet-suggester", () => ({ BulletSuggester: () => null }));
@@ -30,6 +35,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   fetchMock = vi.fn();
+  refresh.mockClear();
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -107,22 +113,74 @@ describe("ApplicationDetailTabs contacts save", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("shows the server field error and does not save notes when contacts are rejected", async () => {
+  it("shows the real contacts-route error and does not save notes when contacts are rejected", async () => {
+    const flat = z
+      .object({ contacts: z.array(contactSchema) })
+      .safeParse({ contacts: [{ name: "Jane Doe", email: "jane@company" }] });
+    if (flat.success) throw new Error("expected the schema to reject the email");
     fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
       if (init.method === "PUT") {
-        return {
-          ok: false,
-          json: async () => ({
-            error: { formErrors: [], fieldErrors: { linkedin: ["Invalid url"] } },
-          }),
-        };
+        return { ok: false, json: async () => ({ error: flat.error.flatten() }) };
       }
       return { ok: true, json: async () => ({}) };
     });
     renderTabs();
-    addContact("Jane Doe", "linkedin.com/in/jane");
+    addContact("Jane Doe", "");
+    const emails = screen.getAllByPlaceholderText("jane@company.com");
+    fireEvent.change(emails[emails.length - 1]!, { target: { value: "jane@company" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
-    await screen.findByText(/Invalid url/);
+    await screen.findByText("Contacts not saved: Invalid email");
     expect(callsTo("PATCH")).toHaveLength(0);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("reports a partial save when the PATCH returns not ok", async () => {
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      if (init.method === "PATCH") return { ok: false, json: async () => ({}) };
+      return { ok: true, json: async () => ({}) };
+    });
+    renderTabs();
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await screen.findByText("Contacts saved, but notes/follow-up failed to save");
+    expect(screen.queryByText("Saved!")).toBeNull();
+    const methods = fetchMock.mock.calls.map((c) => (c[1] as RequestInit).method);
+    expect(methods.indexOf("PUT")).toBeLessThan(methods.indexOf("PATCH"));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a partial save when the PATCH request throws", async () => {
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      if (init.method === "PATCH") throw new TypeError("Failed to fetch");
+      return { ok: true, json: async () => ({}) };
+    });
+    renderTabs();
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await screen.findByText("Contacts saved, but notes/follow-up failed to save");
+    expect(screen.queryByText("Failed to fetch")).toBeNull();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes the route once after a full save", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    renderTabs();
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await screen.findByText("Saved!");
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not refresh when a nameless row blocks the save", async () => {
+    renderTabs();
+    addContact("", "linkedin.com/in/jane");
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await screen.findByText(/name/i, { selector: "span.text-destructive" });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("does not refresh when the contacts PUT returns not ok", async () => {
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({}) });
+    renderTabs();
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await screen.findByText("Failed to save contacts");
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

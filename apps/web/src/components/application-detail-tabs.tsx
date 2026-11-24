@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +47,8 @@ function toContact(form: ContactForm): Contact {
   };
 }
 
+const PARTIAL_SAVE_MESSAGE = "Contacts saved, but notes/follow-up failed to save";
+
 /** Turn a zod-flattened 400 body from the contacts route into a short readable reason. */
 async function contactsErrorMessage(res: Response): Promise<string> {
   try {
@@ -54,9 +57,10 @@ async function contactsErrorMessage(res: Response): Promise<string> {
     };
     const parts: string[] = [...(body.error?.formErrors ?? [])];
     for (const [field, msgs] of Object.entries(body.error?.fieldErrors ?? {})) {
-      parts.push(`${field}: ${msgs.join(", ")}`);
+      const joined = [...new Set(msgs)].join(", ");
+      parts.push(field === "contacts" ? joined : `${field}: ${joined}`);
     }
-    if (parts.length > 0) return `Contacts not saved (${parts.join("; ")})`;
+    if (parts.length > 0) return `Contacts not saved: ${parts.join("; ")}`;
   } catch {
     // fall through to the generic message
   }
@@ -75,6 +79,7 @@ interface Props {
 // ---------------------------------------------------------------------------
 
 function OverviewTab({ application }: { application: Props["application"] }) {
+  const router = useRouter();
   const [notes, setNotes] = useState<string>(application.notes ?? "");
   const [followUpAt, setFollowUpAt] = useState<string>(
     application.followUpAt ? new Date(application.followUpAt).toISOString().slice(0, 10) : "",
@@ -106,6 +111,7 @@ function OverviewTab({ application }: { application: Props["application"] }) {
       setSaving(false);
       return;
     }
+    let wrote = false;
     try {
       // Contacts go first: if they are rejected, notes and follow-up are not written.
       const contactsRes = await fetch(`/api/applications/${id}/contacts`, {
@@ -114,6 +120,7 @@ function OverviewTab({ application }: { application: Props["application"] }) {
         body: JSON.stringify({ contacts: rows.map(toContact) }),
       });
       if (!contactsRes.ok) throw new Error(await contactsErrorMessage(contactsRes));
+      wrote = true;
 
       const patchRes = await fetch(`/api/applications/${id}`, {
         method: "PATCH",
@@ -123,13 +130,15 @@ function OverviewTab({ application }: { application: Props["application"] }) {
           followUpAt: followUpAt !== "" ? new Date(followUpAt).toISOString() : null,
         }),
       });
-      if (!patchRes.ok) throw new Error("Contacts saved, but notes/follow-up failed to save");
+      if (!patchRes.ok) throw new Error(PARTIAL_SAVE_MESSAGE);
 
       setSaved(true);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Unknown error");
+      setSaveError(wrote ? PARTIAL_SAVE_MESSAGE : err instanceof Error ? err.message : "Unknown error");
     } finally {
       setSaving(false);
+      // Refresh the server payload so a later remount does not re-seed stale values.
+      if (wrote) router.refresh();
     }
   }
 
