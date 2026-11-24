@@ -5,8 +5,19 @@ import { Lockup } from "@/components/brand/lockup";
 import { OrbBackground } from "@/components/brand/orb-background";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+// Messages for the ?error= codes set by /api/auth/callback.
+function errorMessage(code: string | string[] | undefined): string | null {
+  if (code === "auth_failed") return "Sign-in did not complete. Please try again.";
+  return null;
+}
+
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string | string[] };
+}) {
   const supabase = getBrowserSupabase();
+  const error = errorMessage(searchParams?.error);
 
   async function signIn(provider: "google" | "github") {
     await supabase.auth.signInWithOAuth({
@@ -25,6 +36,11 @@ export default function LoginPage() {
         <p className="text-sm text-muted-foreground">
           AI drafts every piece of an application. You review and ship.
         </p>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <div className="space-y-3">
           <Button variant="gradient" className="w-full" onClick={() => signIn("google")}>
             Continue with Google
