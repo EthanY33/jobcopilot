@@ -70,6 +70,8 @@ Set `AUTH_ALLOWED_EMAILS` in Vercel (see the list above). The check lives in `ap
 - `/api/auth/callback`: an account that is not on the list is signed out and sent to `/login?error=not_allowed`, where the page says "This account is not allowed to sign in."
 - The middleware: a session for an account that is not on the list is redirected to that login page on app pages and gets `403 {"error":"not_allowed"}` on `/api` routes.
 
+Use the email on the Google or GitHub account itself (for GitHub, its primary email). If a sign-in is refused, Supabase -> Authentication -> Users shows the email that account arrived with. A Google account and a GitHub account with different emails are two separate users, and each one needs its own entry.
+
 Changing the variable only takes effect on the next deployment.
 
 ### 2. Supabase Auth settings
