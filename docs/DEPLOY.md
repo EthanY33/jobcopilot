@@ -87,6 +87,10 @@ Keep the Email provider on in the local dev project. The Playwright auth setup s
 
 To let another account in later: add its email to `AUTH_ALLOWED_EMAILS`, redeploy, turn sign-ups back on, have the account sign in once, then turn sign-ups off again.
 
+### Self-hosting
+
+The `/api` allowlist check and the cross-site write check run in the Next.js middleware; the route handlers do not repeat them. The pinned Next.js 14.2.5 lets a request skip middleware with an `x-middleware-subrequest` header (CVE-2025-29927, fixed in 14.2.25). The Next.js advisory lists Vercel-hosted deployments as not affected, so the Vercel deploy described here is covered. Do not serve this build with `next start` or a standalone server on a public address until Next.js is upgraded to 14.2.25 or later, or the reverse proxy strips `x-middleware-subrequest` from incoming requests.
+
 ## Sanity check after deploy
 
 1. Visit the production URL → `/login` renders.
