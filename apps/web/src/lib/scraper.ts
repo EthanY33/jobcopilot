@@ -19,11 +19,53 @@ export function detectAts(url: string): AtsSource {
   return "manual";
 }
 
+// The two helpers below replace regexes that rescanned to the end of the
+// input from every opener when no closer followed. That is quadratic, and a
+// 2 MB page of "<script" or "<a" blocked the event loop for minutes. Each
+// helper walks the input once.
+
+// Removes every <tag ... </tag> block. An opener with no closer removes the
+// rest of the input, which is how a browser reads an unclosed script or style.
+function stripBlocks(html: string, tag: "script" | "style"): string {
+  const open = new RegExp(`<${tag}`, "gi");
+  const close = new RegExp(`</${tag}>`, "gi");
+  let out = "";
+  let pos = 0;
+  for (;;) {
+    open.lastIndex = pos;
+    const start = open.exec(html);
+    if (!start) return out + html.slice(pos);
+    out += html.slice(pos, start.index) + " ";
+    close.lastIndex = open.lastIndex;
+    if (!close.exec(html)) return out;
+    pos = close.lastIndex;
+  }
+}
+
+// Replaces what /<[^>]+>/g matched: a "<", at least one character, then the
+// next ">". Once no ">" is left, no later "<" can match either, so stop.
+function stripTags(html: string): string {
+  let out = "";
+  let pos = 0;
+  for (;;) {
+    const lt = html.indexOf("<", pos);
+    if (lt === -1) break;
+    const gt = html.indexOf(">", lt + 1);
+    if (gt === -1) break;
+    if (gt === lt + 1) {
+      // "<>" has nothing between the brackets, so it stays as text.
+      out += html.slice(pos, gt);
+      pos = gt;
+      continue;
+    }
+    out += html.slice(pos, lt) + " ";
+    pos = gt + 1;
+  }
+  return out + html.slice(pos);
+}
+
 export function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+  return stripTags(stripBlocks(stripBlocks(html, "script"), "style"))
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
