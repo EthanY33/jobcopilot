@@ -327,7 +327,7 @@ export function ApplicationDetailTabs({ application, variants }: Props) {
         <TabsTrigger value="timeline">Timeline</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="overview">
+      <TabsContent value="overview" forceMount className="data-[state=inactive]:hidden">
         <OverviewTab application={application} />
       </TabsContent>
 
