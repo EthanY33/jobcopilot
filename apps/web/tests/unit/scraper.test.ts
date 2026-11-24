@@ -49,7 +49,8 @@ describe("htmlToText", () => {
   it("keeps text aligned when a character changes length in lower case", () => {
     // U+0130 lowercases to two code units, so offsets taken from a lowercased
     // copy of the input would be shifted.
-    expect(htmlToText("İİİ<script>drop()</script>ok")).toBe("İİİ ok");
+    const dotted = String.fromCodePoint(0x130).repeat(3);
+    expect(htmlToText(`${dotted}<script>drop()</script>ok`)).toBe(`${dotted} ok`);
   });
   it("drops an unclosed script or style block through the end of input", () => {
     expect(htmlToText("<p>Keep</p><script>alert(1)")).toBe("Keep");
@@ -490,8 +491,8 @@ describe("scrape", () => {
     });
 
     it("counts bytes, not characters", async () => {
-      // 700,000 euro signs are 2.1 MB of UTF-8 but only 700,000 characters.
-      const euro = new TextEncoder().encode("€".repeat(70_000));
+      // 700,000 euro signs (U+20AC) are 2.1 MB of UTF-8 but only 700,000 characters.
+      const euro = new TextEncoder().encode(String.fromCodePoint(0x20ac).repeat(70_000));
       async function* body(): AsyncGenerator<Uint8Array> {
         for (let i = 0; i < 10; i++) yield euro;
       }
@@ -513,14 +514,15 @@ describe("scrape", () => {
 
     it("decodes a character that is split across two chunks", async () => {
       async function* body(): AsyncGenerator<Uint8Array> {
-        yield new Uint8Array([0x3c, 0x70, 0x3e, 0x63, 0x61, 0x66, 0xc3]); // "<p>caf" + first byte of e-acute
-        yield new Uint8Array([0xa9, 0x3c, 0x2f, 0x70, 0x3e]); // second byte + "</p>"
+        // "<p>caf", then the two UTF-8 bytes of e-acute (U+00E9) in separate chunks.
+        yield new Uint8Array([0x3c, 0x70, 0x3e, 0x63, 0x61, 0x66, 0xc3]);
+        yield new Uint8Array([0xa9, 0x3c, 0x2f, 0x70, 0x3e]);
       }
       const fetch = web({ [url]: () => ({ status: 200, headers: {}, body: body() }) });
 
       const result = await scrape(url, { resolve, fetch });
 
-      expect(result.text).toBe("café");
+      expect(result.text).toBe(`caf${String.fromCodePoint(0xe9)}`);
     });
   });
 
