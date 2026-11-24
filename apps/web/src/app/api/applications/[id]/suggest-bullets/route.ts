@@ -130,10 +130,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         kind: "resume_bullets",
         version: nextVersion,
         parentDraftId: priorLatest?.id ?? null,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         originalPromptInputs: {
           resumeVariantId: variant.id,
-        } as any,
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         aiDraft: JSON.stringify(suggestions),
         userEdited: "",
         finalized: false,

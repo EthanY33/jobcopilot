@@ -99,7 +99,7 @@ export async function POST(request: Request) {
       data: {
         userId: data.user.id,
         name: "Base",
-        bullets: parsed.sections as any,
+        bullets: parsed.sections as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         emphasisKeywords: [],
       },
     });

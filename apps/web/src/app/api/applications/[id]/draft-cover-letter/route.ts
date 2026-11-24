@@ -115,11 +115,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         kind: "cover_letter",
         version: nextVersion,
         parentDraftId: priorLatest?.id ?? null,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         originalPromptInputs: {
           resumeVariantId: variant.id,
           override: parsed.data.override ?? null,
-        } as any,
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         aiDraft: output.body,
         userEdited: "",
         finalized: false,
