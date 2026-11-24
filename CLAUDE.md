@@ -11,7 +11,7 @@ Ethan's personal AI-assisted job-application tool, **not multi-tenant SaaS**. Ne
 pnpm install
 pnpm -F @jobcopilot/db db:push          # push schema to Supabase
 pnpm -F @jobcopilot/db apply:policies   # apply RLS policies
-pnpm -F @jobcopilot/db generate         # regen Prisma client after schema edits
+pnpm -F @jobcopilot/db generate         # regen Prisma client after schema edits (turbo also runs it before typecheck/test/build)
 pnpm dev                                # apps/web on :3000
 pnpm test                               # vitest unit + integration
 pnpm test:e2e                           # playwright e2e (auto-starts dev w/ mocks)
