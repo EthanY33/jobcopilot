@@ -60,10 +60,12 @@ alter table public.job_postings enable row level security;
 drop policy if exists job_postings_read on public.job_postings;
 create policy job_postings_read on public.job_postings
   for select using (auth.role() = 'authenticated');
+-- No insert/update/delete policies. The app writes job_postings through Prisma
+-- as the postgres role, which bypasses RLS, so the Data API must not be able to
+-- plant rows that /api/postings/extract would later serve to other users.
+-- The drop removes the old permissive insert policy from existing databases.
 drop policy if exists job_postings_insert on public.job_postings;
-create policy job_postings_insert on public.job_postings
-  for insert with check (auth.role() = 'authenticated');
--- no update/delete policies: app inserts are append-only
+revoke insert, update, delete on public.job_postings from anon, authenticated;
 
 -- Trigger: create users row automatically on auth.users insert
 create or replace function public.handle_new_auth_user()
