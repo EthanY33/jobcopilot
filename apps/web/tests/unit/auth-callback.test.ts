@@ -76,6 +76,11 @@ describe("GET /api/auth/callback next parameter", () => {
     expect(target.pathname + target.search).toBe("/tracker?tab=1");
   });
 
+  it("drops a fragment from next", async () => {
+    const res = await callback(`?code=ok&next=${encodeURIComponent("/tracker?tab=1#access_token=x")}`);
+    expect(location(res).href).toBe(`${ORIGIN}/tracker?tab=1`);
+  });
+
   it("defaults to /dashboard", async () => {
     const res = await callback("?code=ok");
     expect(location(res).href).toBe(`${ORIGIN}/dashboard`);

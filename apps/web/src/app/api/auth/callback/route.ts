@@ -25,6 +25,8 @@ function safeNextUrl(raw: string | null, origin: string): URL {
     return fallback;
   }
   if (target.origin !== origin || target.pathname.startsWith("//")) return fallback;
+  // Path and query only.
+  target.hash = "";
   return target;
 }
 
