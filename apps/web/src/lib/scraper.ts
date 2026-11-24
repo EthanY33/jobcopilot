@@ -220,8 +220,10 @@ const BROTLI_OPTIONS = {
   finishFlush: zlib.constants.BROTLI_OPERATION_FLUSH,
 };
 
-// Undoes the response's Content-Encoding.
-function decodeContent(body: Readable, encoding: string | undefined): Readable {
+// Undoes the response's Content-Encoding as the body streams through. scrape()
+// counts the output of this stream against its size cap, so a small compressed
+// body cannot expand past the cap. Exported for the test of exactly that.
+export function decodeContent(body: Readable, encoding: string | undefined): Readable {
   const ignoreError = () => {};
   switch ((encoding ?? "").trim().toLowerCase()) {
     case "":
@@ -287,14 +289,21 @@ function pinnedGet({ url, addresses, signal }: ScrapeRequest): Promise<ScrapeRes
   });
 }
 
+// Reads the body as UTF-8 and gives up at the first chunk that takes it past
+// the cap. Throwing out of the loop closes the stream, so the rest of a huge
+// or endless response is never downloaded or inflated.
 async function readBody(body: AsyncIterable<Uint8Array>): Promise<string> {
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of body) chunks.push(chunk);
-  const html = new TextDecoder().decode(Buffer.concat(chunks));
-  if (html.length > SCRAPE_MAX_BYTES) {
-    throw new Error(`scrape response too large: ${html.length} bytes`);
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let html = "";
+  for await (const chunk of body) {
+    bytes += chunk.byteLength;
+    if (bytes > SCRAPE_MAX_BYTES) {
+      throw new Error(`scrape response too large: more than ${SCRAPE_MAX_BYTES} bytes`);
+    }
+    html += decoder.decode(chunk, { stream: true });
   }
-  return html;
+  return html + decoder.decode();
 }
 
 export async function scrape(url: string, deps: ScrapeDeps = {}): Promise<ScrapeResult> {
@@ -320,6 +329,8 @@ export async function scrape(url: string, deps: ScrapeDeps = {}): Promise<Scrape
       if (!REDIRECT_STATUSES.has(res.status)) {
         if (res.status < 200 || res.status > 299) throw new Error(`scrape failed: ${res.status}`);
 
+        // A shortcut only: for a compressed response this is the size on the
+        // wire, so readBody enforces the cap on what actually arrives.
         const contentLength = res.headers["content-length"];
         if (contentLength && Number(contentLength) > SCRAPE_MAX_BYTES) {
           throw new Error(`scrape response too large: ${contentLength} bytes`);

@@ -1,6 +1,9 @@
 // @vitest-environment node
+import { Readable } from "node:stream";
+import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
+  decodeContent,
   detectAts,
   htmlToText,
   scrape,
@@ -396,6 +399,129 @@ describe("scrape", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  describe("response size cap", () => {
+    const CAP = 2_000_000;
+    const CHUNK = 64 * 1024;
+    const url = "https://jobs.example.com/big";
+    const resolve = dns({ "jobs.example.com": [PUBLIC_V4] });
+
+    // A body of `count` chunks of the letter "a" that records how many were
+    // pulled and whether the reader closed it.
+    function meteredBody(count: number) {
+      const meter = { pulled: 0, closed: false };
+      async function* body(): AsyncGenerator<Uint8Array> {
+        try {
+          for (let i = 0; i < count; i++) {
+            meter.pulled++;
+            yield new Uint8Array(CHUNK).fill(0x61);
+          }
+        } finally {
+          meter.closed = true;
+        }
+      }
+      return { meter, body: body() };
+    }
+    // The cap is passed partway through chunk 31, so nothing after it is needed.
+    const CHUNKS_TO_PASS_CAP = Math.floor(CAP / CHUNK) + 1;
+
+    it("stops reading as soon as the body passes the cap", async () => {
+      const { meter, body } = meteredBody(200);
+      const fetch = web({ [url]: () => ({ status: 200, headers: {}, body }) });
+
+      await expect(scrape(url, { resolve, fetch })).rejects.toThrow(/too large/);
+
+      expect(meter.pulled).toBe(CHUNKS_TO_PASS_CAP);
+      expect(meter.closed).toBe(true);
+    });
+
+    it("does not trust a small content-length", async () => {
+      // For a compressed response Content-Length is the size on the wire, not
+      // the size of the body the reader ends up with.
+      const { meter, body } = meteredBody(200);
+      const fetch = web({
+        [url]: () => ({ status: 200, headers: { "content-length": "300" }, body }),
+      });
+
+      await expect(scrape(url, { resolve, fetch })).rejects.toThrow(/too large/);
+
+      expect(meter.pulled).toBe(CHUNKS_TO_PASS_CAP);
+      expect(meter.closed).toBe(true);
+    });
+
+    it("rejects a content-length over the cap without reading the body", async () => {
+      const { meter, body } = meteredBody(200);
+      const fetch = web({
+        [url]: () => ({ status: 200, headers: { "content-length": String(CAP + 1) }, body }),
+      });
+
+      await expect(scrape(url, { resolve, fetch })).rejects.toThrow(/too large/);
+
+      expect(meter.pulled).toBe(0);
+    });
+
+    it("applies the cap to the inflated size of a gzip body", async () => {
+      // 64 MB of zeros is about 64 KB of gzip, far under the cap on the wire.
+      const compressed = gzipSync(Buffer.alloc(64 * 1024 * 1024));
+      expect(compressed.byteLength).toBeLessThan(CAP / 10);
+      const wire = Readable.from([compressed], { objectMode: false });
+      let inflated = 0;
+      async function* body(): AsyncGenerator<Uint8Array> {
+        for await (const chunk of decodeContent(wire, "gzip")) {
+          inflated += chunk.byteLength;
+          yield chunk;
+        }
+      }
+      const fetch = web({
+        [url]: () => ({
+          status: 200,
+          headers: { "content-length": String(compressed.byteLength) },
+          body: body(),
+        }),
+      });
+
+      await expect(scrape(url, { resolve, fetch })).rejects.toThrow(/too large/);
+
+      // Inflating stopped within one zlib chunk of the cap and the compressed
+      // source was closed, not drained.
+      expect(inflated).toBeLessThanOrEqual(CAP + CHUNK);
+      await vi.waitFor(() => expect(wire.destroyed).toBe(true));
+    });
+
+    it("counts bytes, not characters", async () => {
+      // 700,000 euro signs are 2.1 MB of UTF-8 but only 700,000 characters.
+      const euro = new TextEncoder().encode("€".repeat(70_000));
+      async function* body(): AsyncGenerator<Uint8Array> {
+        for (let i = 0; i < 10; i++) yield euro;
+      }
+      const fetch = web({ [url]: () => ({ status: 200, headers: {}, body: body() }) });
+
+      await expect(scrape(url, { resolve, fetch })).rejects.toThrow(/too large/);
+    });
+
+    it("accepts a body of exactly the cap", async () => {
+      async function* body(): AsyncGenerator<Uint8Array> {
+        yield new Uint8Array(CAP).fill(0x61);
+      }
+      const fetch = web({ [url]: () => ({ status: 200, headers: {}, body: body() }) });
+
+      const result = await scrape(url, { resolve, fetch });
+
+      expect(result.html.length).toBe(CAP);
+    });
+
+    it("decodes a character that is split across two chunks", async () => {
+      async function* body(): AsyncGenerator<Uint8Array> {
+        yield new Uint8Array([0x3c, 0x70, 0x3e, 0x63, 0x61, 0x66, 0xc3]); // "<p>caf" + first byte of e-acute
+        yield new Uint8Array([0xa9, 0x3c, 0x2f, 0x70, 0x3e]); // second byte + "</p>"
+      }
+      const fetch = web({ [url]: () => ({ status: 200, headers: {}, body: body() }) });
+
+      const result = await scrape(url, { resolve, fetch });
+
+      expect(result.text).toBe("café");
+    });
   });
 
   // tests/e2e/google-referral.spec.ts scrapes a fixture page served by the dev
