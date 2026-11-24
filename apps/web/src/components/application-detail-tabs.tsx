@@ -25,14 +25,42 @@ interface ContactForm {
   linkedin: string;
 }
 
-/** Strip empty strings → undefined and drop _formId to produce API-ready Contact. */
+function ensureHttps(v: string): string {
+  const trimmed = v.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function isBlankContact(form: ContactForm): boolean {
+  return [form.name, form.role, form.email, form.linkedin].every((v) => v.trim() === "");
+}
+
+/** Strip empty strings → undefined, normalise LinkedIn to https, and drop _formId to produce API-ready Contact. */
 function toContact(form: ContactForm): Contact {
   return {
-    name: form.name,
-    role: form.role || undefined,
-    email: form.email || undefined,
-    linkedin: form.linkedin || undefined,
+    name: form.name.trim(),
+    role: form.role.trim() || undefined,
+    email: form.email.trim() || undefined,
+    linkedin: ensureHttps(form.linkedin) || undefined,
   };
+}
+
+/** Turn a zod-flattened 400 body from the contacts route into a short readable reason. */
+async function contactsErrorMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as {
+      error?: { formErrors?: string[]; fieldErrors?: Record<string, string[]> };
+    };
+    const parts: string[] = [...(body.error?.formErrors ?? [])];
+    for (const [field, msgs] of Object.entries(body.error?.fieldErrors ?? {})) {
+      parts.push(`${field}: ${msgs.join(", ")}`);
+    }
+    if (parts.length > 0) return `Contacts not saved (${parts.join("; ")})`;
+  } catch {
+    // fall through to the generic message
+  }
+  return "Failed to save contacts";
 }
 
 interface Props {
@@ -72,24 +100,30 @@ function OverviewTab({ application }: { application: Props["application"] }) {
     setSaving(true);
     setSaveError(null);
     setSaved(false);
+    const rows = contacts.filter((c) => !isBlankContact(c));
+    if (rows.some((c) => c.name.trim() === "")) {
+      setSaveError("Each contact needs a name. Nothing was saved.");
+      setSaving(false);
+      return;
+    }
     try {
-      const [patchRes, contactsRes] = await Promise.all([
-        fetch(`/api/applications/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            notes,
-            followUpAt: followUpAt !== "" ? new Date(followUpAt).toISOString() : null,
-          }),
+      // Contacts go first: if they are rejected, notes and follow-up are not written.
+      const contactsRes = await fetch(`/api/applications/${id}/contacts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacts: rows.map(toContact) }),
+      });
+      if (!contactsRes.ok) throw new Error(await contactsErrorMessage(contactsRes));
+
+      const patchRes = await fetch(`/api/applications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notes,
+          followUpAt: followUpAt !== "" ? new Date(followUpAt).toISOString() : null,
         }),
-        fetch(`/api/applications/${id}/contacts`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contacts: contacts.map(toContact) }),
-        }),
-      ]);
-      if (!patchRes.ok) throw new Error("Failed to save notes/follow-up");
-      if (!contactsRes.ok) throw new Error("Failed to save contacts");
+      });
+      if (!patchRes.ok) throw new Error("Contacts saved, but notes/follow-up failed to save");
 
       setSaved(true);
     } catch (err) {

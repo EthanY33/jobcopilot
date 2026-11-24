@@ -64,3 +64,65 @@ describe("ApplicationDetailTabs overview tab", () => {
     expect(patchBodies[1].notes).toBe("NEW");
   });
 });
+
+describe("ApplicationDetailTabs contacts save", () => {
+  function addContact(name: string, linkedin: string) {
+    fireEvent.click(screen.getByRole("button", { name: /add contact/i }));
+    const names = screen.getAllByPlaceholderText("Jane Doe");
+    const links = screen.getAllByPlaceholderText(/linkedin\.com\/in\/jane/i);
+    fireEvent.change(names[names.length - 1]!, { target: { value: name } });
+    fireEvent.change(links[links.length - 1]!, { target: { value: linkedin } });
+  }
+
+  function callsTo(method: string) {
+    return fetchMock.mock.calls.filter((c) => (c[1] as RequestInit).method === method);
+  }
+
+  it("prepends https:// to a scheme-less LinkedIn value", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    renderTabs();
+    addContact("Jane Doe", "linkedin.com/in/jane");
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await screen.findByText("Saved!");
+    const put = callsTo("PUT")[0]!;
+    const body = JSON.parse((put[1] as RequestInit).body as string);
+    expect(body.contacts[0].linkedin).toBe("https://linkedin.com/in/jane");
+  });
+
+  it("drops fully empty contact rows", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    renderTabs();
+    fireEvent.click(screen.getByRole("button", { name: /add contact/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await screen.findByText("Saved!");
+    const body = JSON.parse((callsTo("PUT")[0]![1] as RequestInit).body as string);
+    expect(body.contacts).toEqual([]);
+  });
+
+  it("blocks the whole save with a readable message when a row has no name", async () => {
+    renderTabs();
+    addContact("", "linkedin.com/in/jane");
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await screen.findByText(/name/i, { selector: "span.text-destructive" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("shows the server field error and does not save notes when contacts are rejected", async () => {
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      if (init.method === "PUT") {
+        return {
+          ok: false,
+          json: async () => ({
+            error: { formErrors: [], fieldErrors: { linkedin: ["Invalid url"] } },
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+    renderTabs();
+    addContact("Jane Doe", "linkedin.com/in/jane");
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await screen.findByText(/Invalid url/);
+    expect(callsTo("PATCH")).toHaveLength(0);
+  });
+});
