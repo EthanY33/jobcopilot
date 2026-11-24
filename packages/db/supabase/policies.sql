@@ -11,12 +11,13 @@ alter table public.users enable row level security;
 drop policy if exists users_self_read on public.users;
 create policy users_self_read on public.users
   for select using (auth.uid() = id);
+-- No self update/insert policies: the security definer trigger below creates the
+-- row, and a user able to set their own email could collide with another
+-- person's address and make that person's first sign-in fail on users_email_key.
+-- The drops remove the old policies from existing databases.
 drop policy if exists users_self_update on public.users;
-create policy users_self_update on public.users
-  for update using (auth.uid() = id);
 drop policy if exists users_self_insert on public.users;
-create policy users_self_insert on public.users
-  for insert with check (auth.uid() = id);
+revoke insert, update, delete on public.users from anon, authenticated;
 
 -- Helper: direct user_id policies
 drop policy if exists profiles_owner on public.profiles;
