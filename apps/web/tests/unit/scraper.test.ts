@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { EventEmitter } from "node:events";
+import http from "node:http";
+import https from "node:https";
 import { Readable } from "node:stream";
 import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
@@ -562,6 +565,134 @@ describe("scrape", () => {
 
       await expect(scrape(url, { resolve, fetch })).rejects.toThrow(/blocked address/);
       expect(fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  // The tests above inject deps.fetch, so none of them runs the transport that
+  // the route really uses. Here node:http and node:https request() are
+  // replaced by spies that return a canned response, so the default transport
+  // runs without opening a socket. DNS is still injected.
+  describe("default transport", () => {
+    interface Canned {
+      statusCode: number;
+      headers: Record<string, string>;
+      body: Buffer;
+    }
+
+    function stubRequest(mod: typeof http | typeof https, respond: (url: URL) => Canned) {
+      const impl = (
+        url: URL,
+        _options: http.RequestOptions,
+        onResponse: (res: http.IncomingMessage) => void,
+      ) => {
+        const request = new EventEmitter() as unknown as http.ClientRequest;
+        request.destroy = vi.fn(() => request);
+        request.end = (() => {
+          const { statusCode, headers, body } = respond(url);
+          const res = Object.assign(Readable.from([body], { objectMode: false }), {
+            statusCode,
+            headers,
+          });
+          queueMicrotask(() => onResponse(res as unknown as http.IncomingMessage));
+          return request;
+        }) as http.ClientRequest["end"];
+        return request;
+      };
+      return vi.spyOn(mod, "request").mockImplementation(impl as unknown as typeof http.request);
+    }
+
+    type Lookup = (
+      hostname: string,
+      options: { all?: boolean },
+      callback: (err: Error | null, address: unknown, family?: number) => void,
+    ) => void;
+
+    // Restore only these spies: vi.restoreAllMocks would also clear the
+    // recorded calls of globalFetch before the outer afterEach checks it.
+    let spies: Array<{ mockRestore(): void }> = [];
+    const track = <T extends { mockRestore(): void }>(spy: T): T => {
+      spies.push(spy);
+      return spy;
+    };
+    afterEach(() => {
+      for (const spy of spies) spy.mockRestore();
+      spies = [];
+    });
+
+    it("connects only to the addresses that were checked", async () => {
+      const resolve = dns({ "jobs.example.com": [PUBLIC_V4, PUBLIC_V6] });
+      const request = track(
+        stubRequest(https, () => ({
+          statusCode: 200,
+          headers: {},
+          body: Buffer.from("<p>Role</p>"),
+        })),
+      );
+
+      const result = await scrape("https://jobs.example.com/role/1", { resolve });
+
+      expect(result.text).toBe("Role");
+      expect(request).toHaveBeenCalledTimes(1);
+      const options = request.mock.calls[0]?.[1] as http.RequestOptions;
+      expect(options.agent).toBe(false);
+      const lookup = options.lookup as unknown as Lookup;
+      expect(typeof lookup).toBe("function");
+      // net.connect asks for every address (all: true) or for a single one.
+      const all = await new Promise((done) =>
+        lookup("jobs.example.com", { all: true }, (_err, list) => done(list)),
+      );
+      expect(all).toEqual([
+        { address: PUBLIC_V4, family: 4 },
+        { address: PUBLIC_V6, family: 6 },
+      ]);
+      const one = await new Promise((done) =>
+        lookup("jobs.example.com", {}, (_err, address, family) => done([address, family])),
+      );
+      expect(one).toEqual([PUBLIC_V4, 4]);
+    });
+
+    it("does not follow a redirect to a blocked address", async () => {
+      const resolve = dns({ "short.example.com": [PUBLIC_V4] });
+      const secure = track(
+        stubRequest(https, () => ({
+          statusCode: 302,
+          headers: { location: "http://127.0.0.1:8080/admin" },
+          body: Buffer.alloc(0),
+        })),
+      );
+      const plain = track(
+        stubRequest(http, () => ({
+          statusCode: 200,
+          headers: {},
+          body: Buffer.from("internal"),
+        })),
+      );
+
+      await expect(scrape("https://short.example.com/r", { resolve })).rejects.toThrow(
+        /blocked address/,
+      );
+      expect(secure).toHaveBeenCalledTimes(1);
+      expect(plain).not.toHaveBeenCalled();
+    });
+
+    it("undoes gzip and applies the cap to the inflated bytes", async () => {
+      const resolve = dns({ "jobs.example.com": [PUBLIC_V4] });
+      const small = gzipSync("<p>Zipped</p>");
+      const bomb = gzipSync(Buffer.alloc(16 * 1024 * 1024));
+      track(
+        stubRequest(http, (url) => ({
+          statusCode: 200,
+          headers: { "content-encoding": "gzip" },
+          body: url.pathname === "/bomb" ? bomb : small,
+        })),
+      );
+
+      await expect(scrape("http://jobs.example.com/ok", { resolve })).resolves.toMatchObject({
+        text: "Zipped",
+      });
+      await expect(scrape("http://jobs.example.com/bomb", { resolve })).rejects.toThrow(
+        /too large/,
+      );
     });
   });
 });
