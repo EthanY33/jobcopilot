@@ -152,6 +152,18 @@ describe("middleware cross-site write check", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("rejects a cross-site write whose middleware path was shifted by a query parameter", async () => {
+    stubGoTrue();
+    const res = await middleware(
+      request("/x/api/variants?__nextLocale=x", {
+        method: "POST",
+        headers: { origin: "https://evil.example", host: "localhost:3000", cookie: sessionCookie(nowSeconds() + 3600) },
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "cross-site request" });
+  });
+
   it.each(["PUT", "PATCH", "DELETE"])("rejects a cross-site %s", async (method) => {
     stubGoTrue();
     const res = await middleware(
@@ -268,6 +280,29 @@ describe("middleware sign-in allowlist", () => {
       expect(res.status).toBe(200);
       expect(res.headers.get("x-middleware-next")).toBe("1");
       expect(res.headers.get("location")).toBeNull();
+    });
+
+    function forwardedCookies(res: Response): string {
+      expect(res.headers.get("x-middleware-next")).toBe("1");
+      expect(res.headers.get("x-middleware-override-headers")).toContain("cookie");
+      return res.headers.get("x-middleware-request-cookie") ?? "";
+    }
+
+    it.each(["/login?/api/variants&__nextLocale=login%3F", "/?x=/api/variants"])(
+      "does not forward the refused session on the pass-through for %s",
+      async (path) => {
+        const res = await middleware(
+          request(path, { headers: { cookie: `theme=dark; ${validSession()}` } }),
+        );
+        const forwarded = forwardedCookies(res);
+        expect(forwarded).not.toContain(COOKIE_NAME);
+        expect(forwarded).toContain("theme=dark");
+      },
+    );
+
+    it("does not forward a just-refreshed refused token on the pass-through", async () => {
+      const res = await middleware(request("/login", { headers: { cookie: expiredSession() } }));
+      expect(forwardedCookies(res)).not.toContain(COOKIE_NAME);
     });
 
     it("keeps the refreshed cookie attributes on the denial redirect", async () => {

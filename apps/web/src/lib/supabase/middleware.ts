@@ -44,12 +44,20 @@ export async function updateSession(request: NextRequest) {
 
   // A signed-in account that is not on the allowlist gets no app access: 403
   // for the API, the login page with a message for everything else. "/" and
-  // "/login" are served as they are to a signed-out visitor.
+  // "/login" are served to a signed-out visitor (the session is stripped).
   if (data.user && !isEmailAllowed(data.user.email)) {
     if (pathname.startsWith("/api/")) {
       return withCookies(response, NextResponse.json({ error: "not_allowed" }, { status: 403 }));
     }
-    if (pathname === "/" || pathname === "/login") return response;
+    if (pathname === "/" || pathname === "/login") {
+      // Serve the public page, but never forward the refused session: the
+      // pathname seen here can differ from the route that really runs behind
+      // the middleware, so that route must see a signed-out request.
+      request.cookies.getAll().forEach((cookie) => {
+        if (cookie.name.startsWith("sb-")) request.cookies.delete(cookie.name);
+      });
+      return withCookies(response, NextResponse.next({ request: { headers: request.headers } }));
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "?error=not_allowed";
