@@ -49,6 +49,8 @@ pnpm -F @jobcopilot/db apply:policies
 
 `apply:policies` runs `packages/db/scripts/apply-policies.mjs`, which executes `packages/db/supabase/policies.sql`. The script is idempotent — re-running it after a schema change is safe.
 
+The script verifies the database server certificate. Download the CA certificate from the Supabase dashboard (Project Settings, Database, SSL Configuration) and set `DB_SSL_CA_FILE` to its absolute path (a relative path resolves from `packages/db`). Without it the script stops with a certificate error and changes nothing. `APPLY_POLICIES_INSECURE_TLS=1` skips verification for a one-off run on a trusted network. TLS options inside `DIRECT_URL`, such as `sslmode`, are ignored by this script.
+
 ## Auth callback URL
 
 In Supabase → Authentication → URL Configuration:
