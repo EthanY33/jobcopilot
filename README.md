@@ -47,7 +47,7 @@ Prerequisites: Node 20 LTS, pnpm (version pinned via `packageManager` in root `p
 pnpm install
 cp .env.example .env                    # fill in Supabase + Anthropic keys
 pnpm -F @jobcopilot/db db:push          # push schema to Supabase
-pnpm -F @jobcopilot/db apply:policies   # apply RLS policies
+pnpm -F @jobcopilot/db apply:policies   # apply RLS policies (needs DB_SSL_CA_FILE, see docs/DEPLOY.md)
 pnpm dev                                # starts apps/web on :3000
 ```
 
@@ -64,7 +64,7 @@ Sign in with Google or GitHub.
 
 ```bash
 pnpm test                          # unit + integration (vitest)
-pnpm test:e2e                      # playwright e2e (own dev server on :3100 with mocks; needs E2E_PASSWORD; stop pnpm dev first (shared .next))
+pnpm test:e2e                      # playwright e2e (own dev server on :3100 with mocks; needs E2E_PASSWORD, plus E2E_ALLOW_REMOTE_SUPABASE=1 for a hosted dev project; stop pnpm dev first (shared .next))
 pnpm -F @jobcopilot/prompts eval   # prompt regression harness
 ```
 
