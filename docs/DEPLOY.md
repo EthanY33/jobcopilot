@@ -83,7 +83,7 @@ The allowlist only guards this app. The anon key is public, so anyone can still 
 1. Deploy, then sign in once with each account listed in `AUTH_ALLOWED_EMAILS` so its user exists.
 2. In Supabase -> Authentication -> Sign In / Providers (older dashboards: Providers and Settings), turn off "Allow new users to sign up".
 3. On the same page, disable the Email provider. The app only signs in with Google and GitHub, so no password sign-in should be possible on the production project.
-4. In Authentication -> Users, check that only the expected accounts exist and delete any other. That includes `e2e@jobcopilot.test`, which exists if the Playwright suite was ever pointed at this project: its password is in the repo.
+4. In Authentication -> Users, check that only the expected accounts exist and delete any other. That includes `e2e@jobcopilot.test`, which exists if the Playwright suite was ever pointed at this project: its original password was committed to this repo and is still in the git history.
 
 Keep the Email provider on in the local dev project. The Playwright auth setup signs in there with a password.
 
@@ -91,7 +91,7 @@ To let another account in later: add its email to `AUTH_ALLOWED_EMAILS`, redeplo
 
 ### Self-hosting
 
-The `/api` allowlist check and the cross-site write check run in the Next.js middleware; the route handlers do not repeat them. The pinned Next.js 14.2.5 lets a request skip middleware with an `x-middleware-subrequest` header (CVE-2025-29927, fixed in 14.2.25). The Next.js advisory lists Vercel-hosted deployments as not affected, so the Vercel deploy described here is covered. Do not serve this build with `next start` or a standalone server on a public address until Next.js is upgraded to 14.2.25 or later, or the reverse proxy strips `x-middleware-subrequest` from incoming requests.
+The `/api` allowlist check and the cross-site write check run in the Next.js middleware; the route handlers do not repeat them. Next.js releases before 14.2.25 let a request skip middleware with an `x-middleware-subrequest` header (CVE-2025-29927). This repo pins Next.js 14.2.35, which includes the fix, so `next start` and standalone servers are covered as well as Vercel. Do not downgrade Next.js below 14.2.25.
 
 ## Sanity check after deploy
 
