@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getClaude } from "@/lib/claude";
+import { isPrismaError } from "@/lib/application-queries";
 import { buildResumeParseRequest, parseResumeResponse } from "@jobcopilot/prompts";
 import { prisma } from "@jobcopilot/db";
 
@@ -27,12 +28,26 @@ export async function POST(request: Request) {
   const declaredBytes = Number(request.headers.get("content-length"));
   if (declaredBytes > MAX_RESUME_PDF_BYTES + MULTIPART_OVERHEAD_BYTES) return fileTooLarge();
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ error: "invalid form data" }, { status: 400 });
+  }
   const file = formData.get("file");
   if (!(file instanceof File) || file.type !== "application/pdf") {
     return NextResponse.json({ error: "pdf required" }, { status: 400 });
   }
   if (file.size > MAX_RESUME_PDF_BYTES) return fileTooLarge();
+
+  // The parsed resume is written to the profile row. Make sure the row is
+  // there before paying for the Claude call.
+  const profile = await prisma.profile.findUnique({
+    where: { userId: data.user.id },
+    select: { userId: true },
+  });
+  if (!profile) return NextResponse.json({ error: "profile not found" }, { status: 404 });
+
   const bytes = await file.arrayBuffer();
   const b64 = Buffer.from(bytes).toString("base64");
 
@@ -60,13 +75,20 @@ export async function POST(request: Request) {
     );
   }
 
-  await prisma.profile.update({
-    where: { userId: data.user.id },
-    data: {
-      baseResumeText: parsed.baseResumeText,
-      skills: parsed.skills,
-    },
-  });
+  try {
+    await prisma.profile.update({
+      where: { userId: data.user.id },
+      data: {
+        baseResumeText: parsed.baseResumeText,
+        skills: parsed.skills,
+      },
+    });
+  } catch (err) {
+    if (isPrismaError(err, "P2025")) {
+      return NextResponse.json({ error: "profile not found" }, { status: 404 });
+    }
+    throw err;
+  }
 
   // Also create a default "Base" ResumeVariant if none exists
   const existing = await prisma.resumeVariant.findFirst({

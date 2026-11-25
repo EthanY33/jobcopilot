@@ -29,6 +29,7 @@ vi.mock("@/lib/claude", () => ({ getClaude }));
 import { POST as postDraft } from "@/app/api/applications/[id]/draft-cover-letter/route";
 import { POST as postBullets } from "@/app/api/applications/[id]/suggest-bullets/route";
 import { POST as postResume } from "@/app/api/profile/parse-resume/route";
+import { PATCH as patchProfile } from "@/app/api/profile/route";
 
 const ctx = (id: string) => ({ params: { id } });
 
@@ -275,5 +276,93 @@ describe("jobcopilot-13: input size caps on the LLM routes", () => {
     const res = await postResume(pdfUpload(5 * MB));
     expect(res.status).toBe(200);
     expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+function prismaError(code: string): Error {
+  return Object.assign(new Error(code), { code });
+}
+
+function profilePatch(body: string): Request {
+  return new Request("http://localhost:3000/api/profile", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body,
+  });
+}
+
+describe("jobcopilot-10: profile routes handle bad bodies and a missing profile row", () => {
+  it("PATCH /api/profile returns 400 for malformed JSON", async () => {
+    const res = await patchProfile(profilePatch("{bad"));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid JSON" });
+    expect(db.profile.update).not.toHaveBeenCalled();
+  });
+
+  it("PATCH /api/profile returns 404 when the profile row is missing", async () => {
+    db.profile.update.mockRejectedValue(prismaError("P2025"));
+    const res = await patchProfile(profilePatch(JSON.stringify({ targetRoles: ["Engineer"] })));
+    expect(res.status).toBe(404);
+  });
+
+  it("PATCH /api/profile still rethrows unknown errors", async () => {
+    db.profile.update.mockRejectedValue(prismaError("P9999"));
+    await expect(
+      patchProfile(profilePatch(JSON.stringify({ targetRoles: ["Engineer"] }))),
+    ).rejects.toThrow();
+  });
+
+  it("PATCH /api/profile still saves a valid body", async () => {
+    db.profile.update.mockResolvedValue({ userId: USER, targetRoles: ["Engineer"] });
+    const res = await patchProfile(profilePatch(JSON.stringify({ targetRoles: ["Engineer"] })));
+    expect(res.status).toBe(200);
+    expect(db.profile.update).toHaveBeenCalledWith({
+      where: { userId: USER },
+      data: { targetRoles: ["Engineer"] },
+    });
+  });
+
+  it("parse-resume returns 400 for a body that is not form data", async () => {
+    const res = await postResume(
+      new Request("http://localhost:3000/api/profile/parse-resume", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ file: "x" }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(getClaude).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume does not call Claude when the profile row is missing", async () => {
+    db.profile.findUnique.mockResolvedValue(null);
+    const res = await postResume(pdfUpload(10));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "profile not found" });
+    expect(getClaude).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume returns 404, not a crash, when the profile row vanishes after the Claude call", async () => {
+    db.profile.findUnique.mockResolvedValue({ userId: USER });
+    create.mockResolvedValue(reply(PARSED_RESUME));
+    db.profile.update.mockRejectedValue(prismaError("P2025"));
+    const res = await postResume(pdfUpload(10));
+    expect(res.status).toBe(404);
+    expect(db.resumeVariant.create).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume still stores a parsed resume", async () => {
+    db.profile.findUnique.mockResolvedValue({ userId: USER });
+    db.resumeVariant.findFirst.mockResolvedValue(null);
+    create.mockResolvedValue(reply(PARSED_RESUME));
+    const res = await postResume(pdfUpload(10));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, sections: 1 });
+    expect(db.profile.update).toHaveBeenCalledWith({
+      where: { userId: USER },
+      data: { baseResumeText: "Resume", skills: ["TypeScript"] },
+    });
+    expect(db.resumeVariant.create).toHaveBeenCalledTimes(1);
   });
 });
