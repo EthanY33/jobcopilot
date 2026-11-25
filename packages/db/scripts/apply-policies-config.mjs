@@ -28,3 +28,16 @@ export function stripSslParams(connectionString) {
   const head = connectionString.slice(0, q);
   return kept.length ? `${head}?${kept.join("&")}` : head;
 }
+
+// stripSslParams is a deny-list. This check fails closed behind it: pg keeps the
+// ssl object by reference unless the connection string replaced it (a bare "ssl"
+// flag, a percent-encoded parameter name, or a parameter a later pg adds).
+export function createClient(pg, url, ssl) {
+  const client = new pg.Client({ connectionString: stripSslParams(url), ssl });
+  if (client.ssl !== ssl) {
+    throw new Error(
+      "it contains an option that changes the TLS settings. Remove it; DB_SSL_CA_FILE and APPLY_POLICIES_INSECURE_TLS control TLS.",
+    );
+  }
+  return client;
+}

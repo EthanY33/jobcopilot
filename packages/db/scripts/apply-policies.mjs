@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import pg from "pg";
-import { buildSslConfig, stripSslParams } from "./apply-policies-config.mjs";
+import { buildSslConfig, createClient, stripSslParams } from "./apply-policies-config.mjs";
 
 async function main() {
   const url = process.env.DIRECT_URL;
@@ -27,21 +27,24 @@ async function main() {
   const sqlPath = resolve(here, "..", "supabase", "policies.sql");
   const sql = readFileSync(sqlPath, "utf8");
 
-  const connectionString = stripSslParams(url);
-  if (connectionString !== url) {
+  if (stripSslParams(url) !== url) {
     console.error(
       "TLS options in DIRECT_URL are ignored by this script. DB_SSL_CA_FILE and APPLY_POLICIES_INSECURE_TLS control TLS.",
     );
   }
 
-  let client;
+  let ssl;
   try {
-    client = new pg.Client({
-      connectionString,
-      ssl: buildSslConfig(process.env),
-    });
+    ssl = buildSslConfig(process.env);
   } catch (err) {
     console.error("Cannot read DB_SSL_CA_FILE:", err.message);
+    process.exit(1);
+  }
+  let client;
+  try {
+    client = createClient(pg, url, ssl);
+  } catch (err) {
+    console.error("Invalid DIRECT_URL:", err.message);
     process.exit(1);
   }
 

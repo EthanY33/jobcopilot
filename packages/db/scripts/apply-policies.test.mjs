@@ -5,7 +5,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pg from "pg";
-import { buildSslConfig, stripSslParams } from "./apply-policies-config.mjs";
+import { buildSslConfig, createClient, stripSslParams } from "./apply-policies-config.mjs";
 
 test("verifies the server certificate by default", () => {
   assert.deepEqual(buildSslConfig({}), { rejectUnauthorized: true });
@@ -45,13 +45,17 @@ const ENVS = [{}, { APPLY_POLICIES_INSECURE_TLS: "1" }];
 for (const q of QUERIES) {
   for (const env of ENVS) {
     test(`script TLS config wins over DIRECT_URL query "${q}" with env ${JSON.stringify(env)}`, () => {
-      const client = new pg.Client({
-        connectionString: stripSslParams(BASE + q),
-        ssl: buildSslConfig(env),
-      });
-      assert.deepEqual(client.ssl, buildSslConfig(env));
+      const ssl = buildSslConfig(env);
+      const client = createClient(pg, BASE + q, ssl);
+      assert.equal(client.ssl, ssl);
     });
   }
+}
+
+for (const q of ["?ssl", "?pgbouncer=true&ssl", "?%73slmode=disable", "?ssl%6dode=no-verify"]) {
+  test(`createClient fails closed on DIRECT_URL query "${q}"`, () => {
+    assert.throws(() => createClient(pg, BASE + q, buildSslConfig({})), /changes the TLS settings/);
+  });
 }
 
 test("stripSslParams keeps unrelated parameters", () => {
