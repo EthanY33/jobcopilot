@@ -28,6 +28,8 @@ export function ApplicationCard({ id, title, company, updatedAt }: Props) {
       onPointerDown={onPointerDown as React.PointerEventHandler<HTMLDivElement> | undefined}
       className={cn(
         "cursor-grab active:cursor-grabbing touch-none select-none",
+        // The focusable handle is sr-only, so draw the focus ring on the whole card.
+        "[&:has(:focus-visible)]:outline [&:has(:focus-visible)]:outline-2",
         isDragging && "opacity-50",
       )}
     >
