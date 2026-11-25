@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { prisma, Prisma } from "@jobcopilot/db";
 import { getClaude } from "@/lib/claude";
+import { isUuid } from "@/lib/application-queries";
 import {
   buildCoverLetterRequest,
   parseCoverLetterResponse,
@@ -18,6 +19,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const supabase = getServerSupabase();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+
+  if (!isUuid(params.id)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   let body: unknown;
   try {
@@ -142,6 +145,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const supabase = getServerSupabase();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+
+  if (!isUuid(params.id)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   let body: unknown;
   try {
