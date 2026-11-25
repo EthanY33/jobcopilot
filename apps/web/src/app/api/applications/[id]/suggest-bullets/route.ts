@@ -4,9 +4,11 @@ import { prisma, Prisma } from "@jobcopilot/db";
 import { getClaude } from "@/lib/claude";
 import { isUuid } from "@/lib/application-queries";
 import {
+  MAX_PROMPT_CHARS,
   MAX_SUGGEST_BULLETS,
   buildSuggestBulletsRequest,
   parseBulletSuggestionsResponse,
+  promptChars,
   type CachedPrefixInputs,
 } from "@jobcopilot/prompts";
 import { suggestBulletsRequestSchema } from "@jobcopilot/shared";
@@ -70,22 +72,27 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     );
   }
 
+  const request = buildSuggestBulletsRequest({
+    cached,
+    sections,
+    jobPostingText: app.jobPosting.description + "\n\n" + app.jobPosting.requirements.join("\n"),
+    company: app.jobPosting.company,
+    title: app.jobPosting.title,
+    emphasisKeywords: variant.emphasisKeywords,
+  });
+
+  // The profile, variant and posting come from the database, where nothing
+  // bounds their size. Refuse an oversized prompt before paying for it.
+  if (promptChars(request) > MAX_PROMPT_CHARS) {
+    return NextResponse.json({ error: "prompt_too_large" }, { status: 400 });
+  }
+
   // The provider's error text and the parser's messages stay in the server
   // log. The browser only ever gets one of two fixed codes.
   const claude = getClaude();
   let res;
   try {
-    res = await claude.messages.create(
-      buildSuggestBulletsRequest({
-        cached,
-        sections,
-        jobPostingText:
-          app.jobPosting.description + "\n\n" + app.jobPosting.requirements.join("\n"),
-        company: app.jobPosting.company,
-        title: app.jobPosting.title,
-        emphasisKeywords: variant.emphasisKeywords,
-      }),
-    );
+    res = await claude.messages.create(request);
   } catch (err) {
     console.error("[suggest-bullets] claude request failed:", err);
     return NextResponse.json({ error: "claude_request_failed", retryable: true }, { status: 502 });

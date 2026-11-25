@@ -28,6 +28,7 @@ vi.mock("@/lib/claude", () => ({ getClaude }));
 
 import { POST as postDraft } from "@/app/api/applications/[id]/draft-cover-letter/route";
 import { POST as postBullets } from "@/app/api/applications/[id]/suggest-bullets/route";
+import { POST as postResume } from "@/app/api/profile/parse-resume/route";
 
 const ctx = (id: string) => ({ params: { id } });
 
@@ -184,5 +185,95 @@ describe("jobcopilot-20: truncated replies and oversized bullet lists", () => {
     expect(res.status).toBe(200);
     const sent = create.mock.calls[0]?.[0] as { max_tokens: number };
     expect(sent.max_tokens).toBeGreaterThanOrEqual(50 * 200);
+  });
+});
+
+const MB = 1024 * 1024;
+
+function pdfUpload(bytes: number, headers: Record<string, string> = {}): Request {
+  const form = new FormData();
+  form.append("file", new File([new Uint8Array(bytes)], "resume.pdf", { type: "application/pdf" }));
+  return new Request("http://localhost:3000/api/profile/parse-resume", {
+    method: "POST",
+    headers,
+    body: form,
+  });
+}
+
+const PARSED_RESUME = JSON.stringify({
+  baseResumeText: "Resume",
+  skills: ["TypeScript"],
+  sections: [{ section: "Experience", items: ["Built X"] }],
+});
+
+describe("jobcopilot-13: input size caps on the LLM routes", () => {
+  it("draft-cover-letter rejects a 10 KB override before any lookup or Claude call", async () => {
+    const res = await postDraft(
+      json({ resumeVariantId: VARIANT_ID, override: "x".repeat(10 * 1024) }),
+      ctx(APP_ID),
+    );
+    expect(res.status).toBe(400);
+    expect(db.application.findFirst).not.toHaveBeenCalled();
+    expect(getClaude).not.toHaveBeenCalled();
+  });
+
+  it("draft-cover-letter accepts an override at the limit", async () => {
+    create.mockResolvedValue(reply(COVER_LETTER));
+    const res = await postDraft(
+      json({ resumeVariantId: VARIANT_ID, override: "x".repeat(2000) }),
+      ctx(APP_ID),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it.each(routes)("$name refuses to send a prompt built from oversized stored text", async ({ post }) => {
+    db.profile.findUnique.mockResolvedValue({
+      baseResumeText: "Resume text",
+      skills: ["TypeScript"],
+      targetRoles: Array.from({ length: 500 }, () => "r".repeat(1000)),
+    });
+    const res = await post(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "prompt_too_large" });
+    expect(getClaude).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it.each(routes)("$name refuses oversized variant keywords", async ({ post }) => {
+    db.resumeVariant.findFirst.mockResolvedValue({
+      id: VARIANT_ID,
+      emphasisKeywords: ["k".repeat(300_000)],
+      bullets: [{ section: "Experience", items: ["Built X"] }],
+    });
+    const res = await post(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "prompt_too_large" });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume rejects a PDF over 5 MB before calling Claude", async () => {
+    const res = await postResume(pdfUpload(5 * MB + 1));
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "file_too_large", maxBytes: 5 * MB });
+    expect(getClaude).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume rejects on the declared size without reading the body", async () => {
+    const req = pdfUpload(10, { "content-length": String(50 * MB) });
+    const formData = vi.spyOn(req, "formData");
+    const res = await postResume(req);
+    expect(res.status).toBe(413);
+    expect(formData).not.toHaveBeenCalled();
+    expect(getClaude).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume still accepts a PDF at the limit", async () => {
+    db.profile.findUnique.mockResolvedValue({ userId: USER });
+    db.resumeVariant.findFirst.mockResolvedValue({ id: VARIANT_ID });
+    create.mockResolvedValue(reply(PARSED_RESUME));
+    const res = await postResume(pdfUpload(5 * MB));
+    expect(res.status).toBe(200);
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });

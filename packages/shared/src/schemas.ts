@@ -29,7 +29,8 @@ export const extractedJobPostingSchema = z.object({
 export const draftCoverLetterRequestSchema = z.object({
   applicationId: z.string().uuid(),
   resumeVariantId: z.string().uuid(),
-  override: z.string().optional(), // "focus on X"
+  // "focus on X". Goes into the prompt and is stored with the draft, so it is capped.
+  override: z.string().max(2000).optional(),
 });
 
 export const draftCoverLetterResponseSchema = z.object({

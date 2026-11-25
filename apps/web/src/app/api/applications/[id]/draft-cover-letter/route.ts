@@ -5,8 +5,10 @@ import { prisma, Prisma } from "@jobcopilot/db";
 import { getClaude } from "@/lib/claude";
 import { isUuid } from "@/lib/application-queries";
 import {
+  MAX_PROMPT_CHARS,
   buildCoverLetterRequest,
   parseCoverLetterResponse,
+  promptChars,
   type CachedPrefixInputs,
 } from "@jobcopilot/prompts";
 import { draftCoverLetterRequestSchema } from "@jobcopilot/shared";
@@ -55,22 +57,27 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     toneGuidance: "Direct, concrete, specific. Lead with evidence. No filler.",
   };
 
+  const request = buildCoverLetterRequest({
+    cached,
+    jobPostingText: app.jobPosting.description + "\n\n" + app.jobPosting.requirements.join("\n"),
+    company: app.jobPosting.company,
+    title: app.jobPosting.title,
+    variantEmphasis: variant.emphasisKeywords,
+    ...(parsed.data.override !== undefined ? { override: parsed.data.override } : {}),
+  });
+
+  // The profile, variant and posting come from the database, where nothing
+  // bounds their size. Refuse an oversized prompt before paying for it.
+  if (promptChars(request) > MAX_PROMPT_CHARS) {
+    return NextResponse.json({ error: "prompt_too_large" }, { status: 400 });
+  }
+
   // The provider's error text and the parser's messages stay in the server
   // log. The browser only ever gets one of two fixed codes.
   const claude = getClaude();
   let res;
   try {
-    res = await claude.messages.create(
-      buildCoverLetterRequest({
-        cached,
-        jobPostingText:
-          app.jobPosting.description + "\n\n" + app.jobPosting.requirements.join("\n"),
-        company: app.jobPosting.company,
-        title: app.jobPosting.title,
-        variantEmphasis: variant.emphasisKeywords,
-        ...(parsed.data.override !== undefined ? { override: parsed.data.override } : {}),
-      }),
-    );
+    res = await claude.messages.create(request);
   } catch (err) {
     console.error("[draft-cover-letter] claude request failed:", err);
     return NextResponse.json({ error: "claude_request_failed", retryable: true }, { status: 502 });

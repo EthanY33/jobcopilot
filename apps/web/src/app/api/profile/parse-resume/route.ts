@@ -4,16 +4,35 @@ import { getClaude } from "@/lib/claude";
 import { buildResumeParseRequest, parseResumeResponse } from "@jobcopilot/prompts";
 import { prisma } from "@jobcopilot/db";
 
+// A resume is a page or two. The whole PDF is sent to Claude and billed per
+// page, so the cap bounds what one upload can cost.
+const MAX_RESUME_PDF_BYTES = 5 * 1024 * 1024;
+// Room for the multipart boundaries and part headers around the file.
+const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
+
+function fileTooLarge() {
+  return NextResponse.json(
+    { error: "file_too_large", maxBytes: MAX_RESUME_PDF_BYTES },
+    { status: 413 },
+  );
+}
+
 export async function POST(request: Request) {
   const supabase = getServerSupabase();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+
+  // Check the declared size first so an oversized body is never read into
+  // memory. The header can be missing, so the file is checked again below.
+  const declaredBytes = Number(request.headers.get("content-length"));
+  if (declaredBytes > MAX_RESUME_PDF_BYTES + MULTIPART_OVERHEAD_BYTES) return fileTooLarge();
 
   const formData = await request.formData();
   const file = formData.get("file");
   if (!(file instanceof File) || file.type !== "application/pdf") {
     return NextResponse.json({ error: "pdf required" }, { status: 400 });
   }
+  if (file.size > MAX_RESUME_PDF_BYTES) return fileTooLarge();
   const bytes = await file.arrayBuffer();
   const b64 = Buffer.from(bytes).toString("base64");
 
