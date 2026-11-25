@@ -71,6 +71,9 @@ export function CoverLetterDrafter({ application, variants }: Props) {
 
   useEffect(() => {
     if (currentDraft) setEditedBody(currentDraft.userEdited || currentDraft.aiDraft);
+    // Reset the editor only when another draft is selected. Depending on the
+    // whole object would overwrite the editor after every save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDraft?.id]);
 
   async function draft() {
