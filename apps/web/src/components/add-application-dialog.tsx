@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ export function AddApplicationDialog() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const qc = useQueryClient();
 
   async function submit() {
     setError(null);
@@ -33,6 +35,7 @@ export function AddApplicationDialog() {
       }
       setOpen(false);
       setUrl("");
+      await qc.invalidateQueries({ queryKey: ["applications"] });
       router.push(`/applications/${json.applicationId}`);
       router.refresh();
     } catch (e) {

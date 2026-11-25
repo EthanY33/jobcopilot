@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { ApplicationDetailTabs } from "@/components/application-detail-tabs";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUpRight } from "lucide-react";
+import { JOB_POSTING_SELECT, isUuid } from "@/lib/application-queries";
 import type { ApplicationStatus } from "@jobcopilot/shared";
 
 const STATUS_BADGE: Record<ApplicationStatus, "default" | "success" | "destructive" | "secondary"> = {
@@ -31,11 +32,13 @@ export default async function ApplicationPage({ params }: { params: { id: string
   const { data } = await supabase.auth.getUser();
   if (!data.user) redirect("/login");
 
+  if (!isUuid(params.id)) notFound();
+
   const app = await prisma.application.findFirst({
     where: { id: params.id, userId: data.user.id },
     include: {
-      jobPosting: true,
-      resumeVariant: true,
+      jobPosting: { select: JOB_POSTING_SELECT },
+      resumeVariant: { where: { userId: data.user.id } },
       drafts: { orderBy: [{ kind: "asc" }, { version: "desc" }] },
     },
   });

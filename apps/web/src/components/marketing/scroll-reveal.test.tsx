@@ -16,7 +16,7 @@ beforeEach(() => {
       disconnect = vi.fn();
       constructor(cb: IntersectionCallback) {
         this.callback = cb;
-        lastObserver = this;
+        lastObserver = this; // eslint-disable-line @typescript-eslint/no-this-alias
       }
       unobserve = vi.fn();
       takeRecords = () => [];

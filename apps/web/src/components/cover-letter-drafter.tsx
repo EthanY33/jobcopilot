@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { GlassCard } from "@/components/brand/glass-card";
+import { COVER_LETTER_OVERRIDE_MAX_CHARS } from "@jobcopilot/shared";
 
 interface Draft {
   id: string;
@@ -27,6 +28,31 @@ interface Props {
   variants: { id: string; name: string }[];
 }
 
+const SALUTATION = /^(dear|hi|hello|hey|to whom)\b[^\n]{0,60}[,:]\s*$/i;
+
+/**
+ * Swap only the opening sentence of a letter for an alternate. A leading
+ * salutation line and everything after the first sentence stay intact.
+ */
+export function applyAlternateOpening(body: string, alt: string): string {
+  const lines = body.split("\n");
+  let i = 0;
+  while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
+  if (i < lines.length && SALUTATION.test((lines[i] ?? "").trim())) {
+    i++;
+    while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
+  }
+  const head = lines.slice(0, i).join("\n");
+  const prefix = head ? head + "\n" : "";
+  const text = lines.slice(i).join("\n");
+  if (!text) return prefix + alt;
+  const paraEnd = text.indexOf("\n\n");
+  const para = paraEnd === -1 ? text : text.slice(0, paraEnd);
+  const term = /[.!?]["')\]]*(?=\s|$)/.exec(para);
+  const cut = term ? term.index + term[0].length : para.length;
+  return prefix + alt + text.slice(cut);
+}
+
 export function CoverLetterDrafter({ application, variants }: Props) {
   const [localLetters, setLocalLetters] = useState<(Draft & { kind: string })[]>(() =>
     application.drafts.filter((d) => d.kind === "cover_letter"),
@@ -45,6 +71,9 @@ export function CoverLetterDrafter({ application, variants }: Props) {
 
   useEffect(() => {
     if (currentDraft) setEditedBody(currentDraft.userEdited || currentDraft.aiDraft);
+    // Reset the editor only when another draft is selected. Depending on the
+    // whole object would overwrite the editor after every save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDraft?.id]);
 
   async function draft() {
@@ -63,7 +92,7 @@ export function CoverLetterDrafter({ application, variants }: Props) {
         alternateOpenings?: string[];
         error?: unknown;
       };
-      if (!r.ok) throw new Error(String(json.error ?? "draft failed"));
+      if (!r.ok) throw new Error(typeof json.error === "string" ? json.error : "draft failed");
       const newDraft: Draft & { kind: string } = {
         id: json.draftId!,
         version: json.version!,
@@ -102,7 +131,10 @@ export function CoverLetterDrafter({ application, variants }: Props) {
         const json = await r.json().catch(() => ({})) as Record<string, unknown>;
         throw new Error(String(json.error ?? "save failed"));
       }
-      setCurrentDraft({ ...currentDraft, userEdited: editedBody, finalized: finalize });
+      const savedId = currentDraft.id;
+      const saved = { userEdited: editedBody, finalized: finalize };
+      setCurrentDraft({ ...currentDraft, ...saved });
+      setLocalLetters((prev) => prev.map((d) => (d.id === savedId ? { ...d, ...saved } : d)));
     } catch (e) {
       setError(e instanceof Error ? e.message : "save failed");
     } finally {
@@ -158,6 +190,7 @@ export function CoverLetterDrafter({ application, variants }: Props) {
           <Label htmlFor="override">Focus note (optional)</Label>
           <Textarea
             id="override"
+            maxLength={COVER_LETTER_OVERRIDE_MAX_CHARS}
             value={override}
             onChange={(e) => setOverride(e.target.value)}
             placeholder="e.g., emphasize Claude API work"
@@ -178,12 +211,7 @@ export function CoverLetterDrafter({ application, variants }: Props) {
                 variant="ghost"
                 size="sm"
                 className="block h-auto w-full justify-start whitespace-normal text-left text-xs"
-                onClick={() =>
-                  setEditedBody((body) => {
-                    const rest = body.split("\n").slice(1).join("\n");
-                    return alt + (rest ? "\n" + rest : "");
-                  })
-                }
+                onClick={() => setEditedBody((body) => applyAlternateOpening(body, alt))}
               >
                 {alt}
               </Button>

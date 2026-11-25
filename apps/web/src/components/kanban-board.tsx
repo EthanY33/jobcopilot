@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import {
   DndContext, DragOverlay,
   type DragEndEvent, type DragStartEvent,
-  PointerSensor, useSensor, useSensors, useDroppable,
+  KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable,
 } from "@dnd-kit/core";
-import { SortableContext } from "@dnd-kit/sortable";
+import { SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApplicationCard } from "./application-card";
 import { Badge } from "@/components/ui/badge";
@@ -122,7 +122,10 @@ export function KanbanBoard() {
     onSettled: () => qc.invalidateQueries({ queryKey: ["applications"] }),
   });
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<ApplicationStatus, AppRow[]>();

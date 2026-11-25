@@ -14,19 +14,25 @@ export const resumeSectionSchema = z.object({
   items: z.array(z.string()),
 });
 
+// The model fills these fields from a third-party page. They are stored and
+// later put into drafting prompts, so each one is bounded. The extraction
+// prompt states the same limits.
 export const extractedJobPostingSchema = z.object({
-  company: z.string().min(1),
-  title: z.string().min(1),
-  location: z.string().nullable(),
-  requirements: z.array(z.string()),
-  description: z.string(),
+  company: z.string().min(1).max(200),
+  title: z.string().min(1).max(200),
+  location: z.string().max(200).nullable(),
+  requirements: z.array(z.string().max(300)).max(40),
+  description: z.string().max(4000),
   sourceAts: atsSourceSchema,
 });
+
+export const COVER_LETTER_OVERRIDE_MAX_CHARS = 2000;
 
 export const draftCoverLetterRequestSchema = z.object({
   applicationId: z.string().uuid(),
   resumeVariantId: z.string().uuid(),
-  override: z.string().optional(), // "focus on X"
+  // "focus on X". Goes into the prompt and is stored with the draft, so it is capped.
+  override: z.string().max(COVER_LETTER_OVERRIDE_MAX_CHARS).optional(),
 });
 
 export const draftCoverLetterResponseSchema = z.object({
@@ -53,7 +59,15 @@ export const suggestBulletsResponseSchema = z.object({
 });
 
 export const addApplicationRequestSchema = z.object({
-  url: z.string().url(),
+  // z.string().url() alone accepts spaces and newlines inside the URL. The URL
+  // is written into the extraction prompt, where a newline would start a new
+  // prompt line, so whitespace and control characters are refused.
+  url: z
+    .string()
+    .trim()
+    .max(2048)
+    .url()
+    .regex(/^[^\s\p{Cc}]+$/u, "URL must not contain whitespace or control characters"),
 });
 
 export const addApplicationResponseSchema = z.object({

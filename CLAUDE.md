@@ -10,11 +10,11 @@ Ethan's personal AI-assisted job-application tool, **not multi-tenant SaaS**. Ne
 ```
 pnpm install
 pnpm -F @jobcopilot/db db:push          # push schema to Supabase
-pnpm -F @jobcopilot/db apply:policies   # apply RLS policies
-pnpm -F @jobcopilot/db generate         # regen Prisma client after schema edits
+pnpm -F @jobcopilot/db apply:policies   # apply RLS policies (needs DB_SSL_CA_FILE, see docs/DEPLOY.md)
+pnpm -F @jobcopilot/db generate         # regen Prisma client after schema edits (turbo also runs it before typecheck/test/build)
 pnpm dev                                # apps/web on :3000
 pnpm test                               # vitest unit + integration
-pnpm test:e2e                           # playwright e2e (auto-starts dev w/ mocks)
+pnpm test:e2e                           # playwright e2e (own dev server on :3100 w/ mocks; needs E2E_PASSWORD, plus E2E_ALLOW_REMOTE_SUPABASE=1 for a hosted dev project; stop pnpm dev first (shared .next))
 pnpm lint / pnpm typecheck              # turbo lint / tsc across workspaces
 pnpm -F @jobcopilot/prompts eval        # prompt regression harness
 ```

@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { buildCachedPrefix, type CachedPrefixInputs } from "./cache";
 import { extractJson } from "./extract-json";
+import { assertCompleteResponse } from "./response";
+import { wrapUntrusted } from "./untrusted";
 
 export interface CoverLetterInputs {
   cached: CachedPrefixInputs;
@@ -20,10 +22,11 @@ export function buildCoverLetterRequest(
   inputs: CoverLetterInputs,
 ): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const variable = [
-    `Target role: ${inputs.title} at ${inputs.company}`,
-    "",
     "Job posting:",
-    inputs.jobPostingText,
+    wrapUntrusted(
+      "job_posting",
+      [`Target role: ${inputs.title} at ${inputs.company}`, "", inputs.jobPostingText].join("\n"),
+    ),
     "",
     inputs.variantEmphasis.length > 0
       ? `Emphasis keywords: ${inputs.variantEmphasis.join(", ")}`
@@ -50,6 +53,7 @@ export function buildCoverLetterRequest(
 export function parseCoverLetterResponse(
   response: Anthropic.Messages.Message,
 ): CoverLetterOutput {
+  assertCompleteResponse(response);
   const text = response.content
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
     .map((b) => b.text)

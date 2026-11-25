@@ -3,9 +3,12 @@ import { z } from "zod";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { prisma, Prisma } from "@jobcopilot/db";
 import { getClaude } from "@/lib/claude";
+import { isUuid } from "@/lib/application-queries";
 import {
+  MAX_PROMPT_CHARS,
   buildCoverLetterRequest,
   parseCoverLetterResponse,
+  promptChars,
   type CachedPrefixInputs,
 } from "@jobcopilot/prompts";
 import { draftCoverLetterRequestSchema } from "@jobcopilot/shared";
@@ -18,6 +21,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const supabase = getServerSupabase();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+
+  if (!isUuid(params.id)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   let body: unknown;
   try {
@@ -52,26 +57,38 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     toneGuidance: "Direct, concrete, specific. Lead with evidence. No filler.",
   };
 
+  const request = buildCoverLetterRequest({
+    cached,
+    jobPostingText: app.jobPosting.description + "\n\n" + app.jobPosting.requirements.join("\n"),
+    company: app.jobPosting.company,
+    title: app.jobPosting.title,
+    variantEmphasis: variant.emphasisKeywords,
+    ...(parsed.data.override !== undefined ? { override: parsed.data.override } : {}),
+  });
+
+  // The profile, variant and posting come from the database, where nothing
+  // bounds their size. Refuse an oversized prompt before paying for it.
+  if (promptChars(request) > MAX_PROMPT_CHARS) {
+    return NextResponse.json({ error: "prompt_too_large" }, { status: 400 });
+  }
+
+  // The provider's error text and the parser's messages stay in the server
+  // log. The browser only ever gets one of two fixed codes.
   const claude = getClaude();
+  let res;
+  try {
+    res = await claude.messages.create(request);
+  } catch (err) {
+    console.error("[draft-cover-letter] claude request failed:", err);
+    return NextResponse.json({ error: "claude_request_failed", retryable: true }, { status: 502 });
+  }
+
   let output: ReturnType<typeof parseCoverLetterResponse>;
   try {
-    const res = await claude.messages.create(
-      buildCoverLetterRequest({
-        cached,
-        jobPostingText:
-          app.jobPosting.description + "\n\n" + app.jobPosting.requirements.join("\n"),
-        company: app.jobPosting.company,
-        title: app.jobPosting.title,
-        variantEmphasis: variant.emphasisKeywords,
-        ...(parsed.data.override !== undefined ? { override: parsed.data.override } : {}),
-      }),
-    );
     output = parseCoverLetterResponse(res);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "AI generation failed";
-    const isParseError = msg.includes("Invalid") || msg.includes("Expected");
-    console.error("[draft-cover-letter] AI error:", e);
-    return NextResponse.json({ error: msg }, { status: isParseError ? 422 : 502 });
+  } catch (err) {
+    console.error("[draft-cover-letter] claude response parse failed:", err);
+    return NextResponse.json({ error: "parse_failed", retryable: false }, { status: 422 });
   }
 
   const priorMax = await prisma.draftedContent.aggregate({
@@ -98,11 +115,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         kind: "cover_letter",
         version: nextVersion,
         parentDraftId: priorLatest?.id ?? null,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         originalPromptInputs: {
           resumeVariantId: variant.id,
           override: parsed.data.override ?? null,
-        } as any,
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         aiDraft: output.body,
         userEdited: "",
         finalized: false,
@@ -142,6 +158,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const supabase = getServerSupabase();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return NextResponse.json({ error: "unauth" }, { status: 401 });
+
+  if (!isUuid(params.id)) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   let body: unknown;
   try {

@@ -152,7 +152,7 @@ Phases are ordered and gated by ship criteria. No timeboxes.
 
 ### Multi-tenancy
 
-From day 1, every table has `user_id` + RLS policy. Even in v1 with one user (Ethan), this is enforced so Phase 4 productization is a billing/marketing lift, not a data-model rewrite.
+From day 1, every table has `user_id` + RLS policy, so Phase 4 productization is a billing/marketing lift, not a data-model rewrite. The policies protect the Supabase Data API only. The web app reads and writes through Prisma as the postgres role, which bypasses RLS, so per-user isolation in the app depends on every handler filtering by `userId`.
 
 ### Extension ↔ Web API auth (concrete)
 
@@ -160,7 +160,7 @@ From day 1, every table has `user_id` + RLS policy. Even in v1 with one user (Et
 2. Supabase redirects back to extension redirect URL with auth code
 3. Extension exchanges code for access + refresh token → stored in `chrome.storage.local`
 4. All web API calls from extension: `Authorization: Bearer <access_token>`
-5. Web API uses Supabase client with user's JWT; RLS enforces per-user access automatically
+5. Web API validates the user's JWT with the Supabase client (`auth.getUser()`); data access goes through Prisma, which bypasses RLS, so each handler must scope queries by `userId`
 6. On 401: refresh token flow silently; if refresh fails, re-prompt auth
 
 ## 7. Data Model
@@ -214,7 +214,7 @@ DiscoveryEvent (Phase 3)
   match_rationale, digest_sent_at
 ```
 
-All tables have `user_id` where applicable + RLS enforcing `user_id = auth.uid()`.
+All tables have `user_id` where applicable + RLS enforcing `user_id = auth.uid()` for Data API access. Prisma bypasses RLS, so handler-level `userId` filters are the control for app requests.
 
 ## 8. Core Flows
 

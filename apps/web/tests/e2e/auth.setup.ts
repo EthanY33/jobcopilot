@@ -3,46 +3,19 @@ import { createClient } from "@supabase/supabase-js";
 import { prisma } from "@jobcopilot/db";
 import path from "node:path";
 import fs from "node:fs";
+import { resolveE2eAccount } from "./e2e-guards";
+import { loadE2eEnv } from "./load-env";
 
 const authFile = path.join("playwright", ".auth", "user.json");
 
-/**
- * Minimal .env loader. Playwright's test runner does not auto-load Next.js
- * env files, so the auth setup process won't see SUPABASE_SERVICE_ROLE_KEY
- * unless we forward it manually. We read both apps/web/.env.local (for
- * web-specific overrides) and the workspace-root .env (where the service
- * role key actually lives in this repo). Lines we can't parse are skipped.
- */
-function loadEnvFile(filePath: string): void {
-  if (!fs.existsSync(filePath)) return;
-  const content = fs.readFileSync(filePath, "utf8");
-  for (const line of content.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    let value = trimmed.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (process.env[key] === undefined) {
-      process.env[key] = value;
-    }
-  }
-}
-
-// apps/web is the cwd when Playwright runs; root .env is two levels up.
-loadEnvFile(path.resolve(process.cwd(), ".env.local"));
-loadEnvFile(path.resolve(process.cwd(), "..", "..", ".env"));
-
-const TEST_EMAIL = "e2e@jobcopilot.test";
-const TEST_PASSWORD = "e2e-jobcopilot-test-password-2026";
+// Playwright's config already loads the env for every worker; calling it again
+// is a no-op for set keys and keeps this file runnable on its own.
+loadE2eEnv();
 
 setup("authenticate", async ({ page }) => {
+  // Throws unless E2E_PASSWORD is set and the Supabase URL is local (or
+  // E2E_ALLOW_REMOTE_SUPABASE=1), before anything touches the service key.
+  const { email: TEST_EMAIL, password: TEST_PASSWORD } = resolveE2eAccount(process.env);
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
@@ -51,9 +24,8 @@ setup("authenticate", async ({ page }) => {
     );
   }
 
-  // Idempotently ensure the seeded user exists with the fixed test password.
-  // Updating the password on every run keeps the value deterministic even if
-  // a previous run created the account with a different one.
+  // Idempotently ensure the seeded user exists with the E2E_PASSWORD value.
+  // Updating the password on every run keeps it in sync with the env.
   const admin = createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });

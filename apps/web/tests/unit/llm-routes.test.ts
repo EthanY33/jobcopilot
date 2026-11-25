@@ -1,0 +1,368 @@
+// @vitest-environment node
+import Anthropic from "@anthropic-ai/sdk";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const USER = "11111111-1111-4111-8111-111111111111";
+const APP_ID = "22222222-2222-4222-8222-222222222222";
+const VARIANT_ID = "44444444-4444-4444-8444-444444444444";
+const DRAFT_ID = "55555555-5555-4555-8555-555555555555";
+
+const auth = vi.hoisted(() => ({ getUser: vi.fn() }));
+const create = vi.hoisted(() => vi.fn());
+const getClaude = vi.hoisted(() => vi.fn());
+const db = vi.hoisted(() => ({
+  application: { findFirst: vi.fn(), update: vi.fn() },
+  resumeVariant: { findFirst: vi.fn(), create: vi.fn() },
+  draftedContent: { findFirst: vi.fn(), aggregate: vi.fn(), create: vi.fn() },
+  profile: { findUnique: vi.fn(), update: vi.fn() },
+}));
+
+vi.mock("@/lib/supabase/server", () => ({
+  getServerSupabase: () => ({ auth }),
+}));
+vi.mock("@jobcopilot/db", () => ({
+  prisma: db,
+  Prisma: { PrismaClientKnownRequestError: class extends Error {} },
+}));
+vi.mock("@/lib/claude", () => ({ getClaude }));
+
+import { POST as postDraft } from "@/app/api/applications/[id]/draft-cover-letter/route";
+import { POST as postBullets } from "@/app/api/applications/[id]/suggest-bullets/route";
+import { POST as postResume } from "@/app/api/profile/parse-resume/route";
+import { PATCH as patchProfile } from "@/app/api/profile/route";
+
+const ctx = (id: string) => ({ params: { id } });
+
+function json(body: unknown): Request {
+  return new Request("http://localhost:3000/api/applications/x", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+// What the Anthropic SDK throws for a non-2xx reply: the message is the status
+// followed by the provider's JSON error body.
+function apiError(status: number, type: string, message: string): Error {
+  return Anthropic.APIError.generate(
+    status,
+    { type: "error", error: { type, message }, request_id: "req_011CSecret" },
+    undefined,
+    new Headers(),
+  );
+}
+
+function reply(text: string, stopReason = "end_turn") {
+  return { content: [{ type: "text", text }], stop_reason: stopReason };
+}
+
+const COVER_LETTER = JSON.stringify({ body: "Dear team", alternateOpenings: ["a", "b", "c"] });
+const SUGGESTIONS = JSON.stringify({
+  suggestions: [
+    { section: "Experience", originalBullet: "Built X", suggestedBullet: "Shipped X", rationale: "r" },
+  ],
+});
+
+function seedDraftingRows(): void {
+  db.application.findFirst.mockResolvedValue({
+    id: APP_ID,
+    jobPosting: { company: "Acme", title: "Engineer", description: "Build things", requirements: ["TS"] },
+  });
+  db.resumeVariant.findFirst.mockResolvedValue({
+    id: VARIANT_ID,
+    emphasisKeywords: ["typescript"],
+    bullets: [{ section: "Experience", items: ["Built X"] }],
+  });
+  db.profile.findUnique.mockResolvedValue({
+    baseResumeText: "Resume text",
+    skills: ["TypeScript"],
+    targetRoles: ["Software Engineer"],
+  });
+  db.draftedContent.aggregate.mockResolvedValue({ _max: { version: null } });
+  db.draftedContent.create.mockResolvedValue({ id: DRAFT_ID, version: 1 });
+  db.application.update.mockResolvedValue({ id: APP_ID });
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  auth.getUser.mockResolvedValue({ data: { user: { id: USER } } });
+  getClaude.mockReturnValue({ messages: { create } });
+  seedDraftingRows();
+});
+
+const routes = [
+  { name: "draft-cover-letter", post: postDraft, good: COVER_LETTER },
+  { name: "suggest-bullets", post: postBullets, good: SUGGESTIONS },
+] as const;
+
+describe.each(routes)("jobcopilot-09: $name never returns upstream error text", ({ post, good }) => {
+  const request = () => post(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+
+  it("returns the fixed 502 code when the provider reports a credit problem", async () => {
+    create.mockRejectedValue(
+      apiError(400, "invalid_request_error", "Your credit balance is too low to access the Anthropic API."),
+    );
+    const res = await request();
+    const text = await res.text();
+    expect(res.status).toBe(502);
+    expect(JSON.parse(text)).toEqual({ error: "claude_request_failed", retryable: true });
+    expect(text).not.toContain("credit balance");
+    expect(text).not.toContain("req_011CSecret");
+  });
+
+  it("does not report a provider auth failure as a parse error", async () => {
+    create.mockRejectedValue(apiError(401, "authentication_error", "Invalid API key"));
+    const res = await request();
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "claude_request_failed", retryable: true });
+  });
+
+  it("returns the fixed 502 code for a network failure", async () => {
+    create.mockRejectedValue(new Anthropic.APIConnectionError({ message: "Expected a socket, got ECONNRESET" }));
+    const res = await request();
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "claude_request_failed", retryable: true });
+  });
+
+  it("returns the fixed 422 code when the reply is not JSON", async () => {
+    create.mockResolvedValue(reply("I cannot help with that request."));
+    const res = await request();
+    const text = await res.text();
+    expect(res.status).toBe(422);
+    expect(JSON.parse(text)).toEqual({ error: "parse_failed", retryable: false });
+    expect(text).not.toContain("JSON object");
+  });
+
+  it("returns the fixed 422 code when the reply has the wrong shape", async () => {
+    create.mockResolvedValue(reply('{"unexpected":true}'));
+    const res = await request();
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: "parse_failed", retryable: false });
+  });
+
+  it("still returns the draft when the reply parses", async () => {
+    create.mockResolvedValue(reply(good));
+    const res = await request();
+    expect(res.status).toBe(200);
+    expect((await res.json()).draftId).toBe(DRAFT_ID);
+    expect(db.draftedContent.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("jobcopilot-20: truncated replies and oversized bullet lists", () => {
+  it.each(routes)("$name reports a reply cut off at max_tokens as parse_failed", async ({ post, good }) => {
+    create.mockResolvedValue(reply(good.slice(0, good.length - 5), "max_tokens"));
+    const res = await post(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: "parse_failed", retryable: false });
+    expect(db.draftedContent.create).not.toHaveBeenCalled();
+  });
+
+  it("suggest-bullets refuses a variant with more bullets than one reply can hold", async () => {
+    db.resumeVariant.findFirst.mockResolvedValue({
+      id: VARIANT_ID,
+      emphasisKeywords: [],
+      bullets: [
+        { section: "Experience", items: Array.from({ length: 30 }, (_, i) => `Bullet ${i}`) },
+        { section: "Projects", items: Array.from({ length: 21 }, (_, i) => `Bullet ${i}`) },
+      ],
+    });
+    const res = await postBullets(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "too_many_bullets", max: 50 });
+    expect(getClaude).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("suggest-bullets accepts a variant at the bullet limit", async () => {
+    db.resumeVariant.findFirst.mockResolvedValue({
+      id: VARIANT_ID,
+      emphasisKeywords: [],
+      bullets: [{ section: "Experience", items: Array.from({ length: 50 }, (_, i) => `Bullet ${i}`) }],
+    });
+    create.mockResolvedValue(reply(SUGGESTIONS));
+    const res = await postBullets(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(200);
+    const sent = create.mock.calls[0]?.[0] as { max_tokens: number };
+    expect(sent.max_tokens).toBeGreaterThanOrEqual(50 * 200);
+  });
+});
+
+const MB = 1024 * 1024;
+
+function pdfUpload(bytes: number, headers: Record<string, string> = {}): Request {
+  const form = new FormData();
+  form.append("file", new File([new Uint8Array(bytes)], "resume.pdf", { type: "application/pdf" }));
+  return new Request("http://localhost:3000/api/profile/parse-resume", {
+    method: "POST",
+    headers,
+    body: form,
+  });
+}
+
+const PARSED_RESUME = JSON.stringify({
+  baseResumeText: "Resume",
+  skills: ["TypeScript"],
+  sections: [{ section: "Experience", items: ["Built X"] }],
+});
+
+describe("jobcopilot-13: input size caps on the LLM routes", () => {
+  it("draft-cover-letter rejects a 10 KB override before any lookup or Claude call", async () => {
+    const res = await postDraft(
+      json({ resumeVariantId: VARIANT_ID, override: "x".repeat(10 * 1024) }),
+      ctx(APP_ID),
+    );
+    expect(res.status).toBe(400);
+    expect(db.application.findFirst).not.toHaveBeenCalled();
+    expect(getClaude).not.toHaveBeenCalled();
+  });
+
+  it("draft-cover-letter accepts an override at the limit", async () => {
+    create.mockResolvedValue(reply(COVER_LETTER));
+    const res = await postDraft(
+      json({ resumeVariantId: VARIANT_ID, override: "x".repeat(2000) }),
+      ctx(APP_ID),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it.each(routes)("$name refuses to send a prompt built from oversized stored text", async ({ post }) => {
+    db.profile.findUnique.mockResolvedValue({
+      baseResumeText: "Resume text",
+      skills: ["TypeScript"],
+      targetRoles: Array.from({ length: 500 }, () => "r".repeat(1000)),
+    });
+    const res = await post(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "prompt_too_large" });
+    expect(getClaude).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it.each(routes)("$name refuses oversized variant keywords", async ({ post }) => {
+    db.resumeVariant.findFirst.mockResolvedValue({
+      id: VARIANT_ID,
+      emphasisKeywords: ["k".repeat(300_000)],
+      bullets: [{ section: "Experience", items: ["Built X"] }],
+    });
+    const res = await post(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "prompt_too_large" });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume rejects a PDF over 5 MB before calling Claude", async () => {
+    const res = await postResume(pdfUpload(5 * MB + 1));
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "file_too_large", maxBytes: 5 * MB });
+    expect(getClaude).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume rejects on the declared size without reading the body", async () => {
+    const req = pdfUpload(10, { "content-length": String(50 * MB) });
+    const formData = vi.spyOn(req, "formData");
+    const res = await postResume(req);
+    expect(res.status).toBe(413);
+    expect(formData).not.toHaveBeenCalled();
+    expect(getClaude).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume still accepts a PDF at the limit", async () => {
+    db.profile.findUnique.mockResolvedValue({ userId: USER });
+    db.resumeVariant.findFirst.mockResolvedValue({ id: VARIANT_ID });
+    create.mockResolvedValue(reply(PARSED_RESUME));
+    const res = await postResume(pdfUpload(5 * MB));
+    expect(res.status).toBe(200);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+function prismaError(code: string): Error {
+  return Object.assign(new Error(code), { code });
+}
+
+function profilePatch(body: string): Request {
+  return new Request("http://localhost:3000/api/profile", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body,
+  });
+}
+
+describe("jobcopilot-10: profile routes handle bad bodies and a missing profile row", () => {
+  it("PATCH /api/profile returns 400 for malformed JSON", async () => {
+    const res = await patchProfile(profilePatch("{bad"));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid JSON" });
+    expect(db.profile.update).not.toHaveBeenCalled();
+  });
+
+  it("PATCH /api/profile returns 404 when the profile row is missing", async () => {
+    db.profile.update.mockRejectedValue(prismaError("P2025"));
+    const res = await patchProfile(profilePatch(JSON.stringify({ targetRoles: ["Engineer"] })));
+    expect(res.status).toBe(404);
+  });
+
+  it("PATCH /api/profile still rethrows unknown errors", async () => {
+    db.profile.update.mockRejectedValue(prismaError("P9999"));
+    await expect(
+      patchProfile(profilePatch(JSON.stringify({ targetRoles: ["Engineer"] }))),
+    ).rejects.toThrow();
+  });
+
+  it("PATCH /api/profile still saves a valid body", async () => {
+    db.profile.update.mockResolvedValue({ userId: USER, targetRoles: ["Engineer"] });
+    const res = await patchProfile(profilePatch(JSON.stringify({ targetRoles: ["Engineer"] })));
+    expect(res.status).toBe(200);
+    expect(db.profile.update).toHaveBeenCalledWith({
+      where: { userId: USER },
+      data: { targetRoles: ["Engineer"] },
+    });
+  });
+
+  it("parse-resume returns 400 for a body that is not form data", async () => {
+    const res = await postResume(
+      new Request("http://localhost:3000/api/profile/parse-resume", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ file: "x" }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(getClaude).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume does not call Claude when the profile row is missing", async () => {
+    db.profile.findUnique.mockResolvedValue(null);
+    const res = await postResume(pdfUpload(10));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "profile not found" });
+    expect(getClaude).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume returns 404, not a crash, when the profile row vanishes after the Claude call", async () => {
+    db.profile.findUnique.mockResolvedValue({ userId: USER });
+    create.mockResolvedValue(reply(PARSED_RESUME));
+    db.profile.update.mockRejectedValue(prismaError("P2025"));
+    const res = await postResume(pdfUpload(10));
+    expect(res.status).toBe(404);
+    expect(db.resumeVariant.create).not.toHaveBeenCalled();
+  });
+
+  it("parse-resume still stores a parsed resume", async () => {
+    db.profile.findUnique.mockResolvedValue({ userId: USER });
+    db.resumeVariant.findFirst.mockResolvedValue(null);
+    create.mockResolvedValue(reply(PARSED_RESUME));
+    const res = await postResume(pdfUpload(10));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, sections: 1 });
+    expect(db.profile.update).toHaveBeenCalledWith({
+      where: { userId: USER },
+      data: { baseResumeText: "Resume", skills: ["TypeScript"] },
+    });
+    expect(db.resumeVariant.create).toHaveBeenCalledTimes(1);
+  });
+});

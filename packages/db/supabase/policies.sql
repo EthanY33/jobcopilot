@@ -11,12 +11,13 @@ alter table public.users enable row level security;
 drop policy if exists users_self_read on public.users;
 create policy users_self_read on public.users
   for select using (auth.uid() = id);
+-- No self update/insert policies: the security definer trigger below creates the
+-- row, and a user able to set their own email could collide with another
+-- person's address and make that person's first sign-in fail on users_email_key.
+-- The drops remove the old policies from existing databases.
 drop policy if exists users_self_update on public.users;
-create policy users_self_update on public.users
-  for update using (auth.uid() = id);
 drop policy if exists users_self_insert on public.users;
-create policy users_self_insert on public.users
-  for insert with check (auth.uid() = id);
+revoke insert, update, delete on public.users from anon, authenticated;
 
 -- Helper: direct user_id policies
 drop policy if exists profiles_owner on public.profiles;
@@ -60,10 +61,12 @@ alter table public.job_postings enable row level security;
 drop policy if exists job_postings_read on public.job_postings;
 create policy job_postings_read on public.job_postings
   for select using (auth.role() = 'authenticated');
+-- No insert/update/delete policies. The app writes job_postings through Prisma
+-- as the postgres role, which bypasses RLS, so the Data API must not be able to
+-- plant rows that /api/postings/extract would later serve to other users.
+-- The drop removes the old permissive insert policy from existing databases.
 drop policy if exists job_postings_insert on public.job_postings;
-create policy job_postings_insert on public.job_postings
-  for insert with check (auth.role() = 'authenticated');
--- no update/delete policies: app inserts are append-only
+revoke insert, update, delete on public.job_postings from anon, authenticated;
 
 -- Trigger: create users row automatically on auth.users insert
 create or replace function public.handle_new_auth_user()

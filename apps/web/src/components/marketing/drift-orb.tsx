@@ -12,7 +12,7 @@ interface DriftOrbProps {
   bottom?: string;
   left?: string;
   /** Keyframe name from marketing.module.css (drift1, drift2, ...) */
-  animationName: string;
+  animationName: "drift1" | "drift2";
   /** e.g. "28s" */
   duration: string;
 }
@@ -46,7 +46,7 @@ export function DriftOrb({
         left,
         opacity,
         background: `radial-gradient(closest-side, hsl(${COLOR_HSL[color]}), transparent 70%)`,
-        animation: `${animationName} ${duration} ease-in-out infinite`,
+        animation: `${styles[animationName]} ${duration} ease-in-out infinite`,
       }}
     />
   );

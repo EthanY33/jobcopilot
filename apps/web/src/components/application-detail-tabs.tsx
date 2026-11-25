@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,14 +26,45 @@ interface ContactForm {
   linkedin: string;
 }
 
-/** Strip empty strings → undefined and drop _formId to produce API-ready Contact. */
+function ensureHttps(v: string): string {
+  const trimmed = v.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function isBlankContact(form: ContactForm): boolean {
+  return [form.name, form.role, form.email, form.linkedin].every((v) => v.trim() === "");
+}
+
+/** Strip empty strings → undefined, normalise LinkedIn to https, and drop _formId to produce API-ready Contact. */
 function toContact(form: ContactForm): Contact {
   return {
-    name: form.name,
-    role: form.role || undefined,
-    email: form.email || undefined,
-    linkedin: form.linkedin || undefined,
+    name: form.name.trim(),
+    role: form.role.trim() || undefined,
+    email: form.email.trim() || undefined,
+    linkedin: ensureHttps(form.linkedin) || undefined,
   };
+}
+
+const PARTIAL_SAVE_MESSAGE = "Contacts saved, but notes/follow-up failed to save";
+
+/** Turn a zod-flattened 400 body from the contacts route into a short readable reason. */
+async function contactsErrorMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as {
+      error?: { formErrors?: string[]; fieldErrors?: Record<string, string[]> };
+    };
+    const parts: string[] = [...(body.error?.formErrors ?? [])];
+    for (const [field, msgs] of Object.entries(body.error?.fieldErrors ?? {})) {
+      const joined = [...new Set(msgs)].join(", ");
+      parts.push(field === "contacts" ? joined : `${field}: ${joined}`);
+    }
+    if (parts.length > 0) return `Contacts not saved: ${parts.join("; ")}`;
+  } catch {
+    // fall through to the generic message
+  }
+  return "Failed to save contacts";
 }
 
 interface Props {
@@ -47,6 +79,7 @@ interface Props {
 // ---------------------------------------------------------------------------
 
 function OverviewTab({ application }: { application: Props["application"] }) {
+  const router = useRouter();
   const [notes, setNotes] = useState<string>(application.notes ?? "");
   const [followUpAt, setFollowUpAt] = useState<string>(
     application.followUpAt ? new Date(application.followUpAt).toISOString().slice(0, 10) : "",
@@ -72,30 +105,40 @@ function OverviewTab({ application }: { application: Props["application"] }) {
     setSaving(true);
     setSaveError(null);
     setSaved(false);
+    const rows = contacts.filter((c) => !isBlankContact(c));
+    if (rows.some((c) => c.name.trim() === "")) {
+      setSaveError("Each contact needs a name. Nothing was saved.");
+      setSaving(false);
+      return;
+    }
+    let wrote = false;
     try {
-      const [patchRes, contactsRes] = await Promise.all([
-        fetch(`/api/applications/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            notes,
-            followUpAt: followUpAt !== "" ? new Date(followUpAt).toISOString() : null,
-          }),
+      // Contacts go first: if they are rejected, notes and follow-up are not written.
+      const contactsRes = await fetch(`/api/applications/${id}/contacts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacts: rows.map(toContact) }),
+      });
+      if (!contactsRes.ok) throw new Error(await contactsErrorMessage(contactsRes));
+      wrote = true;
+
+      const patchRes = await fetch(`/api/applications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notes,
+          followUpAt: followUpAt !== "" ? new Date(followUpAt).toISOString() : null,
         }),
-        fetch(`/api/applications/${id}/contacts`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contacts: contacts.map(toContact) }),
-        }),
-      ]);
-      if (!patchRes.ok) throw new Error("Failed to save notes/follow-up");
-      if (!contactsRes.ok) throw new Error("Failed to save contacts");
+      });
+      if (!patchRes.ok) throw new Error(PARTIAL_SAVE_MESSAGE);
 
       setSaved(true);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Unknown error");
+      setSaveError(wrote ? PARTIAL_SAVE_MESSAGE : err instanceof Error ? err.message : "Unknown error");
     } finally {
       setSaving(false);
+      // Refresh the server payload so a later remount does not re-seed stale values.
+      if (wrote) router.refresh();
     }
   }
 
@@ -327,7 +370,7 @@ export function ApplicationDetailTabs({ application, variants }: Props) {
         <TabsTrigger value="timeline">Timeline</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="overview">
+      <TabsContent value="overview" forceMount className="data-[state=inactive]:hidden">
         <OverviewTab application={application} />
       </TabsContent>
 

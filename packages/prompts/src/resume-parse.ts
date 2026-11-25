@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { extractJson } from "./extract-json";
+import { assertCompleteResponse } from "./response";
 
 export interface ParseResumeInputs {
   resumeBase64Pdf: string;
@@ -54,6 +55,7 @@ export function buildResumeParseRequest(
 }
 
 export function parseResumeResponse(response: Anthropic.Messages.Message): ParsedResume {
+  assertCompleteResponse(response);
   const text = response.content
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
     .map((b) => b.text)
