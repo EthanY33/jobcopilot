@@ -64,7 +64,7 @@ Sign in with Google or GitHub.
 
 ```bash
 pnpm test                          # unit + integration (vitest)
-pnpm test:e2e                      # playwright e2e (own dev server on :3100 with mocks; needs E2E_PASSWORD)
+pnpm test:e2e                      # playwright e2e (own dev server on :3100 with mocks; needs E2E_PASSWORD; stop pnpm dev first (shared .next))
 pnpm -F @jobcopilot/prompts eval   # prompt regression harness
 ```
 

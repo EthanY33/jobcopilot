@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 import { E2E_BASE_URL, E2E_PORT } from "./tests/e2e/e2e-guards";
+import { loadE2eEnv } from "./tests/e2e/load-env";
+
+// Runs in the main Playwright process, so the setup and chromium workers (the
+// spec's Prisma reset needs DATABASE_URL) and the webServer child all inherit it.
+loadE2eEnv();
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -34,6 +39,8 @@ export default defineConfig({
     // Own port, never reused: an already-running `pnpm dev` on :3000 would not
     // have the Anthropic mock env below and would send e2e traffic to the
     // real API. If :3100 is busy Playwright fails instead of attaching.
+    // Stop `pnpm dev` before running e2e: both are `next dev` for apps/web and
+    // share apps/web/.next, and two dev servers on one .next dir corrupt it.
     command: `pnpm exec next dev --port ${E2E_PORT}`,
     url: E2E_BASE_URL,
     reuseExistingServer: false,

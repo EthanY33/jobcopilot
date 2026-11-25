@@ -64,6 +64,22 @@ describe("Playwright server isolation", () => {
   });
 });
 
+describe("e2e env reaches every worker", () => {
+  it("loads the root env in the config, not only in the setup project", () => {
+    const config = read("playwright.config.ts");
+    expect(config).toMatch(/from "\.\/tests\/e2e\/load-env"/);
+    expect(config).toMatch(/^loadE2eEnv\(\);$/m);
+  });
+
+  it("keeps the loader free of Playwright and Prisma imports", () => {
+    expect(read("tests/e2e/load-env.ts")).not.toMatch(/@playwright|@jobcopilot\/db/);
+  });
+
+  it("documents the shared .next hazard next to the dev server", () => {
+    expect(read("playwright.config.ts")).toMatch(/Stop `pnpm dev`/);
+  });
+});
+
 describe("ship-criterion spec is hermetic", () => {
   const spec = read("tests/e2e/google-referral.spec.ts");
 
