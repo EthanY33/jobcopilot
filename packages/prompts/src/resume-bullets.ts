@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { buildCachedPrefix, type CachedPrefixInputs } from "./cache";
 import type { ResumeSection } from "@jobcopilot/shared";
 import { extractJson } from "./extract-json";
+import { assertCompleteResponse } from "./response";
 
 export interface SuggestBulletsInputs {
   cached: CachedPrefixInputs;
@@ -18,6 +19,18 @@ export interface BulletSuggestion {
   suggestedBullet: string;
   rationale: string;
 }
+
+/**
+ * Most bullets one suggest call may carry. Each suggestion repeats the
+ * original bullet and adds a rewrite and a rationale, so the reply grows with
+ * the bullet count. Past this the reply would be cut off at max_tokens, and
+ * callers should refuse the request instead of paying for a reply that cannot
+ * be parsed.
+ */
+export const MAX_SUGGEST_BULLETS = 50;
+
+// Output budget per bullet. A typical suggestion is about 130 tokens.
+const OUTPUT_TOKENS_PER_BULLET = 200;
 
 export function buildSuggestBulletsRequest(
   inputs: SuggestBulletsInputs,
@@ -45,7 +58,7 @@ export function buildSuggestBulletsRequest(
 
   return {
     model: "claude-sonnet-4-6",
-    max_tokens: 4000,
+    max_tokens: MAX_SUGGEST_BULLETS * OUTPUT_TOKENS_PER_BULLET,
     temperature: 0.3,
     system: buildCachedPrefix(inputs.cached),
     messages: [{ role: "user", content: variable }],
@@ -55,6 +68,7 @@ export function buildSuggestBulletsRequest(
 export function parseBulletSuggestionsResponse(
   response: Anthropic.Messages.Message,
 ): BulletSuggestion[] {
+  assertCompleteResponse(response);
   const text = response.content
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
     .map((b) => b.text)

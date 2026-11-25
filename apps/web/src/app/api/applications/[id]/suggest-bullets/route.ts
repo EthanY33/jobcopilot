@@ -4,6 +4,7 @@ import { prisma, Prisma } from "@jobcopilot/db";
 import { getClaude } from "@/lib/claude";
 import { isUuid } from "@/lib/application-queries";
 import {
+  MAX_SUGGEST_BULLETS,
   buildSuggestBulletsRequest,
   parseBulletSuggestionsResponse,
   type CachedPrefixInputs,
@@ -55,6 +56,20 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     toneGuidance: "Direct, concrete, specific. Lead with evidence. No filler.",
   };
 
+  // variant.bullets is a Prisma Json field; cast to ResumeSection[] for the prompt builder
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sections = variant.bullets as any as ResumeSection[];
+
+  // The reply repeats every bullet, so past this count it is cut off at
+  // max_tokens and cannot be parsed. Refuse before paying for the call.
+  const bulletCount = sections.reduce((n, s) => n + s.items.length, 0);
+  if (bulletCount > MAX_SUGGEST_BULLETS) {
+    return NextResponse.json(
+      { error: "too_many_bullets", max: MAX_SUGGEST_BULLETS },
+      { status: 400 },
+    );
+  }
+
   // The provider's error text and the parser's messages stay in the server
   // log. The browser only ever gets one of two fixed codes.
   const claude = getClaude();
@@ -63,9 +78,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     res = await claude.messages.create(
       buildSuggestBulletsRequest({
         cached,
-        // variant.bullets is a Prisma Json field; cast to ResumeSection[] for the prompt builder
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        sections: variant.bullets as any as ResumeSection[],
+        sections,
         jobPostingText:
           app.jobPosting.description + "\n\n" + app.jobPosting.requirements.join("\n"),
         company: app.jobPosting.company,

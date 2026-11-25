@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedJobPosting, AtsSource } from "@jobcopilot/shared";
 import { extractedJobPostingSchema } from "@jobcopilot/shared";
 import { extractJson } from "./extract-json";
+import { assertCompleteResponse } from "./response";
 
 export interface JobExtractionInputs {
   url: string;
@@ -44,6 +45,7 @@ export function buildJobExtractionRequest(
 export function parseJobExtractionResponse(
   response: Anthropic.Messages.Message,
 ): ExtractedJobPosting {
+  assertCompleteResponse(response);
   const text = response.content
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
     .map((b) => b.text)

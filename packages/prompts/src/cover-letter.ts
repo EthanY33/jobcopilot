@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { buildCachedPrefix, type CachedPrefixInputs } from "./cache";
 import { extractJson } from "./extract-json";
+import { assertCompleteResponse } from "./response";
 
 export interface CoverLetterInputs {
   cached: CachedPrefixInputs;
@@ -50,6 +51,7 @@ export function buildCoverLetterRequest(
 export function parseCoverLetterResponse(
   response: Anthropic.Messages.Message,
 ): CoverLetterOutput {
+  assertCompleteResponse(response);
   const text = response.content
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
     .map((b) => b.text)

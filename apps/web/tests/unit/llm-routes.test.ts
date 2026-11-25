@@ -147,3 +147,42 @@ describe.each(routes)("jobcopilot-09: $name never returns upstream error text", 
     expect(db.draftedContent.create).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("jobcopilot-20: truncated replies and oversized bullet lists", () => {
+  it.each(routes)("$name reports a reply cut off at max_tokens as parse_failed", async ({ post, good }) => {
+    create.mockResolvedValue(reply(good.slice(0, good.length - 5), "max_tokens"));
+    const res = await post(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: "parse_failed", retryable: false });
+    expect(db.draftedContent.create).not.toHaveBeenCalled();
+  });
+
+  it("suggest-bullets refuses a variant with more bullets than one reply can hold", async () => {
+    db.resumeVariant.findFirst.mockResolvedValue({
+      id: VARIANT_ID,
+      emphasisKeywords: [],
+      bullets: [
+        { section: "Experience", items: Array.from({ length: 30 }, (_, i) => `Bullet ${i}`) },
+        { section: "Projects", items: Array.from({ length: 21 }, (_, i) => `Bullet ${i}`) },
+      ],
+    });
+    const res = await postBullets(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "too_many_bullets", max: 50 });
+    expect(getClaude).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("suggest-bullets accepts a variant at the bullet limit", async () => {
+    db.resumeVariant.findFirst.mockResolvedValue({
+      id: VARIANT_ID,
+      emphasisKeywords: [],
+      bullets: [{ section: "Experience", items: Array.from({ length: 50 }, (_, i) => `Bullet ${i}`) }],
+    });
+    create.mockResolvedValue(reply(SUGGESTIONS));
+    const res = await postBullets(json({ resumeVariantId: VARIANT_ID }), ctx(APP_ID));
+    expect(res.status).toBe(200);
+    const sent = create.mock.calls[0]?.[0] as { max_tokens: number };
+    expect(sent.max_tokens).toBeGreaterThanOrEqual(50 * 200);
+  });
+});
