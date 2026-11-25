@@ -42,7 +42,9 @@ export function resolveE2eAccount(env: Record<string, string | undefined>): {
   const password = env.E2E_PASSWORD;
   if (!password || password.length < 12) {
     throw new Error(
-      "Set E2E_PASSWORD (at least 12 characters) in your shell or .env. There is no committed default.",
+      "Set E2E_PASSWORD (at least 12 characters) in the root .env or apps/web/.env.local. " +
+        "pnpm test:e2e runs through turbo, which does not pass shell variables to the task. " +
+        "There is no committed default.",
     );
   }
   if (!isLocalSupabaseUrl(url) && env.E2E_ALLOW_REMOTE_SUPABASE !== "1") {
