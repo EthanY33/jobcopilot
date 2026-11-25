@@ -312,6 +312,30 @@ describe("middleware sign-in allowlist", () => {
     });
   });
 
+  describe("when the middleware cannot look the user up", () => {
+    const failures: [string, () => void][] = [
+      ["answers 500", () => vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })))],
+      ["answers 429", () => vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 429 })))],
+      ["rejects", () => vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("fetch failed"); }))],
+    ];
+
+    it.each(failures)("does not forward the session when the user lookup %s", async (_name, stub) => {
+      vi.stubEnv("AUTH_ALLOWED_EMAILS", "owner@example.com");
+      stub();
+      const res = await middleware(
+        request("/api/profile/parse-resume", {
+          method: "POST",
+          headers: { origin: ORIGIN, host: "localhost:3000", cookie: `theme=dark; ${validSession()}` },
+        }),
+      );
+      expect(res.headers.get("x-middleware-next")).toBe("1");
+      expect(res.headers.get("x-middleware-override-headers")).toContain("cookie");
+      const forwarded = res.headers.get("x-middleware-request-cookie") ?? "";
+      expect(forwarded).not.toContain(COOKIE_NAME);
+      expect(forwarded).toContain("theme=dark");
+    });
+  });
+
   it("lets a listed email through, ignoring case", async () => {
     vi.stubEnv("AUTH_ALLOWED_EMAILS", "second@example.com, OWNER@example.com");
     stubGoTrue();

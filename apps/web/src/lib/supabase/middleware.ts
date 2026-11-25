@@ -16,6 +16,19 @@ function redirectWithCookies(response: NextResponse, target: URL): NextResponse 
   return withCookies(response, NextResponse.redirect(target));
 }
 
+// Remove every Supabase session cookie from the request that is forwarded to
+// the page or route handler behind the middleware.
+function stripSession(request: NextRequest): boolean {
+  let stripped = false;
+  request.cookies.getAll().forEach((cookie) => {
+    if (cookie.name.startsWith("sb-")) {
+      request.cookies.delete(cookie.name);
+      stripped = true;
+    }
+  });
+  return stripped;
+}
+
 export async function updateSession(request: NextRequest) {
   // `let`: setAll rebuilds `response` after it updates the request cookies.
   let response = NextResponse.next({ request: { headers: request.headers } });
@@ -40,6 +53,13 @@ export async function updateSession(request: NextRequest) {
   );
   const { data } = await supabase.auth.getUser();
 
+  // Forward a session only when this middleware verified it. If the lookup
+  // failed (Auth outage, rate limit, network error) the allowlist could not be
+  // checked, so the handler behind must not see the cookie and re-verify it.
+  if (!data.user && stripSession(request)) {
+    response = withCookies(response, NextResponse.next({ request: { headers: request.headers } }));
+  }
+
   const { pathname } = request.nextUrl;
 
   // A signed-in account that is not on the allowlist gets no app access: 403
@@ -53,9 +73,7 @@ export async function updateSession(request: NextRequest) {
       // Serve the public page, but never forward the refused session: the
       // pathname seen here can differ from the route that really runs behind
       // the middleware, so that route must see a signed-out request.
-      request.cookies.getAll().forEach((cookie) => {
-        if (cookie.name.startsWith("sb-")) request.cookies.delete(cookie.name);
-      });
+      stripSession(request);
       return withCookies(response, NextResponse.next({ request: { headers: request.headers } }));
     }
     const url = request.nextUrl.clone();
