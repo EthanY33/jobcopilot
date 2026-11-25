@@ -3,6 +3,7 @@ import { buildCachedPrefix, type CachedPrefixInputs } from "./cache";
 import type { ResumeSection } from "@jobcopilot/shared";
 import { extractJson } from "./extract-json";
 import { assertCompleteResponse } from "./response";
+import { wrapUntrusted } from "./untrusted";
 
 export interface SuggestBulletsInputs {
   cached: CachedPrefixInputs;
@@ -41,10 +42,11 @@ export function buildSuggestBulletsRequest(
     .join("\n");
 
   const variable = [
-    `Target role: ${inputs.title} at ${inputs.company}`,
-    "",
     "Job posting:",
-    inputs.jobPostingText,
+    wrapUntrusted(
+      "job_posting",
+      [`Target role: ${inputs.title} at ${inputs.company}`, "", inputs.jobPostingText].join("\n"),
+    ),
     "",
     `Emphasis: ${inputs.emphasisKeywords.join(", ")}`,
     "",
