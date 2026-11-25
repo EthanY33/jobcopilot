@@ -59,6 +59,12 @@ describe("htmlToText", () => {
     expect(htmlToText("<p>Keep</p><script>alert(1)")).toBe("Keep");
     expect(htmlToText("<p>Keep</p><style>.x{color:red}")).toBe("Keep");
   });
+  it("matches script and style tags by full name", () => {
+    expect(htmlToText("<styled-box>hello</styled-box> tail text")).toBe("hello tail text");
+    expect(htmlToText("<p>Keep</p><scripture>verse</scripture> tail")).toBe("Keep verse tail");
+    expect(htmlToText("<p>a</p><style>.x{}</style >b")).toBe("a b");
+    expect(htmlToText("<p>a</p><script>x()</script\n>b<p>c</p>")).toBe("a b c");
+  });
   it("leaves a bare < with no closing > as text", () => {
     expect(htmlToText("a <> b < c")).toBe("a <> b < c");
     expect(htmlToText("x <<b> y")).toBe("x y");
@@ -69,10 +75,15 @@ describe("htmlToText", () => {
   // this size. A single forward pass finishes in milliseconds.
   const REPEATS = 300_000;
   it("handles a page of unclosed script openers in one pass", () => {
-    expect(htmlToText("<script".repeat(REPEATS))).toBe("");
+    expect(htmlToText("<script ".repeat(REPEATS))).toBe("");
   }, 10_000);
   it("handles a page of unclosed style openers in one pass", () => {
-    expect(htmlToText("<style".repeat(REPEATS))).toBe("");
+    expect(htmlToText("<style ".repeat(REPEATS))).toBe("");
+  }, 10_000);
+  it("leaves script and style prefixes with no name boundary unchanged", () => {
+    for (const input of ["<script".repeat(REPEATS), "<style".repeat(REPEATS)]) {
+      expect(htmlToText(input) === input).toBe(true);
+    }
   }, 10_000);
   it("handles a page of unclosed tag openers in one pass", () => {
     const input = "<a".repeat(REPEATS);

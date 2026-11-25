@@ -99,9 +99,11 @@ export function detectAts(url: string): AtsSource {
 
 // Removes every <tag ... </tag> block. An opener with no closer removes the
 // rest of the input, which is how a browser reads an unclosed script or style.
+// A tag name ends at whitespace, "/" or ">", so <styled-box> is not a style
+// opener, and an end tag may have whitespace before ">" (</script >).
 function stripBlocks(html: string, tag: "script" | "style"): string {
-  const open = new RegExp(`<${tag}`, "gi");
-  const close = new RegExp(`</${tag}>`, "gi");
+  const open = new RegExp(`<${tag}(?=[\\s/>])`, "gi");
+  const close = new RegExp(`</${tag}\\s*>`, "gi");
   let out = "";
   let pos = 0;
   for (;;) {
