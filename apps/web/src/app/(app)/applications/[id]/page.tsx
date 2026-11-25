@@ -38,7 +38,7 @@ export default async function ApplicationPage({ params }: { params: { id: string
     where: { id: params.id, userId: data.user.id },
     include: {
       jobPosting: { select: JOB_POSTING_SELECT },
-      resumeVariant: true,
+      resumeVariant: { where: { userId: data.user.id } },
       drafts: { orderBy: [{ kind: "asc" }, { version: "desc" }] },
     },
   });

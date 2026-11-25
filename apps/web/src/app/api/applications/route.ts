@@ -10,7 +10,7 @@ export async function GET() {
 
   const apps = await prisma.application.findMany({
     where: { userId: data.user.id },
-    include: { jobPosting: { select: JOB_POSTING_SELECT }, resumeVariant: true },
+    include: { jobPosting: { select: JOB_POSTING_SELECT }, resumeVariant: { where: { userId: data.user.id } } },
     orderBy: { lastActivityAt: "desc" },
   });
   return NextResponse.json(apps);

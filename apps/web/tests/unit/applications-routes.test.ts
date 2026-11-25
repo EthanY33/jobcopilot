@@ -7,19 +7,35 @@ const FOREIGN_VARIANT = "33333333-3333-4333-8333-333333333333";
 const OWN_VARIANT = "44444444-4444-4444-8444-444444444444";
 
 const auth = vi.hoisted(() => ({ getUser: vi.fn() }));
+const getClaude = vi.hoisted(() => vi.fn());
 const db = vi.hoisted(() => ({
   application: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
   resumeVariant: { findFirst: vi.fn(), findMany: vi.fn() },
+  draftedContent: {
+    findFirst: vi.fn(),
+    update: vi.fn(),
+    aggregate: vi.fn(),
+    create: vi.fn(),
+  },
+  profile: { findUnique: vi.fn() },
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   getServerSupabase: () => ({ auth }),
 }));
 vi.mock("@jobcopilot/db", () => ({ prisma: db, Prisma: {} }));
+vi.mock("@/lib/claude", () => ({ getClaude }));
 
 import { GET as getOne, PATCH } from "@/app/api/applications/[id]/route";
 import { GET as getList } from "@/app/api/applications/route";
 import { PUT as putContacts } from "@/app/api/applications/[id]/contacts/route";
+import {
+  PATCH as patchDraft,
+  POST as postDraft,
+} from "@/app/api/applications/[id]/draft-cover-letter/route";
+import { POST as postBullets } from "@/app/api/applications/[id]/suggest-bullets/route";
+
+const DRAFT_ID = "55555555-5555-4555-8555-555555555555";
 
 const ctx = (id: string) => ({ params: { id } });
 
@@ -105,6 +121,93 @@ describe("jobcopilot-10: bad ids and unmapped Prisma errors", () => {
     db.application.update.mockRejectedValue(prismaError("P2025"));
     const gone = await putContacts(json("PUT", { contacts: [] }), ctx(APP_ID));
     expect(gone.status).toBe(404);
+  });
+});
+
+describe("jobcopilot-10: non-UUID path id on LLM routes", () => {
+  it("PATCH draft-cover-letter returns 404 without querying", async () => {
+    const res = await patchDraft(json("PATCH", { draftId: DRAFT_ID }), ctx("not-a-uuid"));
+    expect(res.status).toBe(404);
+    expect(db.draftedContent.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("POST draft-cover-letter returns 404 even when the body carries applicationId", async () => {
+    const res = await postDraft(
+      json("POST", { applicationId: APP_ID, resumeVariantId: OWN_VARIANT }),
+      ctx("not-a-uuid"),
+    );
+    expect(res.status).toBe(404);
+    expect(db.application.findFirst).not.toHaveBeenCalled();
+    expect(getClaude).not.toHaveBeenCalled();
+  });
+
+  it("POST suggest-bullets returns 404 even when the body carries applicationId", async () => {
+    const res = await postBullets(
+      json("POST", { applicationId: APP_ID, resumeVariantId: OWN_VARIANT }),
+      ctx("not-a-uuid"),
+    );
+    expect(res.status).toBe(404);
+    expect(db.application.findFirst).not.toHaveBeenCalled();
+    expect(getClaude).not.toHaveBeenCalled();
+  });
+
+  it("application detail page calls notFound for a non-UUID id", async () => {
+    vi.doMock("next/navigation", () => ({
+      notFound: () => {
+        throw new Error("notFound");
+      },
+      redirect: () => {
+        throw new Error("redirect");
+      },
+    }));
+    vi.doMock("@/components/application-detail-tabs", () => ({
+      ApplicationDetailTabs: () => null,
+    }));
+    const { default: Page } = await import("@/app/(app)/applications/[id]/page");
+    await expect(Page({ params: { id: "not-a-uuid" } })).rejects.toThrow("notFound");
+    expect(db.application.findFirst).not.toHaveBeenCalled();
+  }, 30000);
+});
+
+describe("jobcopilot-05: resumeVariant reads are owner scoped", () => {
+  const scoped = { where: { userId: USER } };
+
+  it("GET /api/applications", async () => {
+    db.application.findMany.mockResolvedValue([]);
+    await getList();
+    const args = db.application.findMany.mock.calls[0]?.[0] as { include: { resumeVariant: unknown } };
+    expect(args.include.resumeVariant).toEqual(scoped);
+  });
+
+  it("GET /api/applications/[id]", async () => {
+    db.application.findFirst.mockResolvedValue({ id: APP_ID });
+    await getOne(new Request("http://localhost:3000/x"), ctx(APP_ID));
+    const args = db.application.findFirst.mock.calls[0]?.[0] as { include: { resumeVariant: unknown } };
+    expect(args.include.resumeVariant).toEqual(scoped);
+  });
+
+  it("application detail page", async () => {
+    vi.doMock("next/navigation", () => ({
+      notFound: () => {
+        throw new Error("notFound");
+      },
+      redirect: () => {
+        throw new Error("redirect");
+      },
+    }));
+    vi.doMock("@/components/application-detail-tabs", () => ({
+      ApplicationDetailTabs: () => null,
+    }));
+    db.application.findFirst.mockResolvedValue({
+      id: APP_ID,
+      status: "wishlist",
+      jobPosting: { company: "c", title: "t", sourceUrl: "" },
+    });
+    db.resumeVariant.findMany.mockResolvedValue([]);
+    const { default: Page } = await import("@/app/(app)/applications/[id]/page");
+    await Page({ params: { id: APP_ID } });
+    const args = db.application.findFirst.mock.calls[0]?.[0] as { include: { resumeVariant: unknown } };
+    expect(args.include.resumeVariant).toEqual(scoped);
   });
 });
 
