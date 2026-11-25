@@ -14,7 +14,7 @@ pnpm -F @jobcopilot/db apply:policies   # apply RLS policies
 pnpm -F @jobcopilot/db generate         # regen Prisma client after schema edits (turbo also runs it before typecheck/test/build)
 pnpm dev                                # apps/web on :3000
 pnpm test                               # vitest unit + integration
-pnpm test:e2e                           # playwright e2e (auto-starts dev w/ mocks)
+pnpm test:e2e                           # playwright e2e (own dev server on :3100 w/ mocks; needs E2E_PASSWORD)
 pnpm lint / pnpm typecheck              # turbo lint / tsc across workspaces
 pnpm -F @jobcopilot/prompts eval        # prompt regression harness
 ```

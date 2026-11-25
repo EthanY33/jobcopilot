@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { prisma } from "@jobcopilot/db";
 import path from "node:path";
 import fs from "node:fs";
+import { resolveE2eAccount } from "./e2e-guards";
 
 const authFile = path.join("playwright", ".auth", "user.json");
 
@@ -39,10 +40,10 @@ function loadEnvFile(filePath: string): void {
 loadEnvFile(path.resolve(process.cwd(), ".env.local"));
 loadEnvFile(path.resolve(process.cwd(), "..", "..", ".env"));
 
-const TEST_EMAIL = "e2e@jobcopilot.test";
-const TEST_PASSWORD = "e2e-jobcopilot-test-password-2026";
-
 setup("authenticate", async ({ page }) => {
+  // Throws unless E2E_PASSWORD is set and the Supabase URL is local (or
+  // E2E_ALLOW_REMOTE_SUPABASE=1), before anything touches the service key.
+  const { email: TEST_EMAIL, password: TEST_PASSWORD } = resolveE2eAccount(process.env);
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
@@ -51,9 +52,8 @@ setup("authenticate", async ({ page }) => {
     );
   }
 
-  // Idempotently ensure the seeded user exists with the fixed test password.
-  // Updating the password on every run keeps the value deterministic even if
-  // a previous run created the account with a different one.
+  // Idempotently ensure the seeded user exists with the E2E_PASSWORD value.
+  // Updating the password on every run keeps it in sync with the env.
   const admin = createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });

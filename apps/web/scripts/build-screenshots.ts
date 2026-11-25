@@ -10,7 +10,8 @@
  * Prereq: dev server running on http://localhost:3000 with the mock anthropic
  * base URL configured (see playwright.config.ts webServer block) and the
  * e2e@jobcopilot.test user already seeded in Supabase (auth.setup.ts handles
- * this on any prior `pnpm test:e2e` run).
+ * this on any prior `pnpm test:e2e` run). Set E2E_PASSWORD to the same value
+ * the e2e run used.
  *
  * Run: pnpm tsx scripts/build-screenshots.ts
  */
@@ -24,7 +25,7 @@ const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
 const OUT_DIR = path.join(REPO_ROOT, "docs", "assets", "screenshots");
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const TEST_EMAIL = "e2e@jobcopilot.test";
-const TEST_PASSWORD = "e2e-jobcopilot-test-password-2026";
+const TEST_PASSWORD = process.env.E2E_PASSWORD ?? "";
 // 1600 wide gives the 7-column kanban enough room that the empty-state hints
 // don't overflow into adjacent columns; 900 tall covers the application
 // detail above the fold (header + tabs + Job Description + Requirements).
