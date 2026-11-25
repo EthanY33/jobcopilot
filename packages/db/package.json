@@ -10,6 +10,7 @@
     "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "db:push": "dotenv -e ../../.env -- prisma db push",
     "studio": "dotenv -e ../../.env -- prisma studio",
+    "test": "node --test scripts/apply-policies.test.mjs",
     "apply:policies": "node --env-file=../../.env scripts/apply-policies.mjs"
   },
   "dependencies": {

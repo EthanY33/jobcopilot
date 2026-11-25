@@ -6,22 +6,15 @@
 // Node's default trust store, so download the CA certificate from the project's
 // database settings and set DB_SSL_CA_FILE to its path. To skip verification
 // for a one-off run, set APPLY_POLICIES_INSECURE_TLS=1 (not recommended).
+// TLS options inside DIRECT_URL (ssl, sslmode, sslrootcert and similar) are
+// removed before connecting; only DB_SSL_CA_FILE and
+// APPLY_POLICIES_INSECURE_TLS control TLS in this script.
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import pg from "pg";
-
-export function buildSslConfig(env) {
-  if (env.APPLY_POLICIES_INSECURE_TLS === "1") {
-    return { rejectUnauthorized: false };
-  }
-  const ssl = { rejectUnauthorized: true };
-  if (env.DB_SSL_CA_FILE) {
-    ssl.ca = readFileSync(env.DB_SSL_CA_FILE, "utf8");
-  }
-  return ssl;
-}
+import { buildSslConfig, stripSslParams } from "./apply-policies-config.mjs";
 
 async function main() {
   const url = process.env.DIRECT_URL;
@@ -34,10 +27,17 @@ async function main() {
   const sqlPath = resolve(here, "..", "supabase", "policies.sql");
   const sql = readFileSync(sqlPath, "utf8");
 
+  const connectionString = stripSslParams(url);
+  if (connectionString !== url) {
+    console.error(
+      "TLS options in DIRECT_URL are ignored by this script. DB_SSL_CA_FILE and APPLY_POLICIES_INSECURE_TLS control TLS.",
+    );
+  }
+
   let client;
   try {
     client = new pg.Client({
-      connectionString: url,
+      connectionString,
       ssl: buildSslConfig(process.env),
     });
   } catch (err) {
@@ -62,6 +62,4 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  await main();
-}
+await main();
