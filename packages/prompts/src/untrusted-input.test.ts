@@ -6,6 +6,7 @@ import {
   buildSuggestBulletsRequest,
   parseJobExtractionResponse,
 } from "./index";
+import { wrapUntrusted } from "./untrusted";
 
 // Text a hostile posting page could carry. The same text reaches the
 // extraction prompt directly and the drafting prompts through the stored
@@ -247,5 +248,71 @@ describe.each(drafting)("jobcopilot-18: $name", ({ build, instruction, fingerpri
     const all = `${userText(req)}\n${systemText(req)}`;
     expect(all).toMatch(fingerprint);
     for (const other of mustNotMatch) expect(all).not.toMatch(other);
+  });
+});
+
+// Nested copies: removing the inner copy must not leave a new one behind.
+const NESTED = [
+  (t: string) => `<</${t}>/${t}> X`,
+  (t: string) => `</<${t}>${t}> X`,
+  (t: string) => `<<${t}>${t}> X`,
+  (t: string) => `<</${t}></${t}>/${t}> X`,
+];
+
+function tagLike(text: string, tag: string): RegExpMatchArray[] {
+  return [...text.matchAll(new RegExp(`<[\\s/]*${tag}\\b[^>]*>`, "gi"))];
+}
+
+describe("jobcopilot-18: nested tag copies", () => {
+  describe.each(NESTED.map((f, i) => ({ f, i })))("variant $i", ({ f }) => {
+    it("keeps page_text inside its block in the extraction prompt", () => {
+      const text = userText(
+        buildJobExtractionRequest({
+          url: "https://example.com/job",
+          pageText: f("page_text"),
+          detectedAts: "manual",
+        }),
+      );
+      expect(tagLike(text, "page_text")).toHaveLength(2);
+      expect(block(text, "page_text")).toContain(" X");
+    });
+
+    it.each(["description", "title", "company"] as const)(
+      "keeps job_posting inside its block in both drafting prompts (%s)",
+      (field) => {
+        const evil = f("job_posting");
+        const description = field === "description" ? evil : "Build things.";
+        const company = field === "company" ? evil : "Acme";
+        const title = field === "title" ? evil : "Engineer";
+        const requests = [
+          buildCoverLetterRequest({
+            cached,
+            jobPostingText: description,
+            company,
+            title,
+            variantEmphasis: ["ts"],
+          }),
+          buildSuggestBulletsRequest({
+            cached,
+            sections: [{ section: "Experience", items: ["Built X"] }],
+            jobPostingText: description,
+            company,
+            title,
+            emphasisKeywords: ["ts"],
+          }),
+        ];
+        for (const req of requests) {
+          const text = userText(req);
+          expect(tagLike(text, "job_posting")).toHaveLength(2);
+          expect(block(text, "job_posting")).toContain(" X");
+        }
+      },
+    );
+  });
+
+  it("returns quickly on a long run of whitespace after a <", () => {
+    const start = Date.now();
+    wrapUntrusted("job_posting", "<" + " ".repeat(200000));
+    expect(Date.now() - start).toBeLessThan(1000);
   });
 });
