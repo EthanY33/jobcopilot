@@ -55,10 +55,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     toneGuidance: "Direct, concrete, specific. Lead with evidence. No filler.",
   };
 
+  // The provider's error text and the parser's messages stay in the server
+  // log. The browser only ever gets one of two fixed codes.
   const claude = getClaude();
-  let suggestions: ReturnType<typeof parseBulletSuggestionsResponse>;
+  let res;
   try {
-    const res = await claude.messages.create(
+    res = await claude.messages.create(
       buildSuggestBulletsRequest({
         cached,
         // variant.bullets is a Prisma Json field; cast to ResumeSection[] for the prompt builder
@@ -71,12 +73,17 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         emphasisKeywords: variant.emphasisKeywords,
       }),
     );
+  } catch (err) {
+    console.error("[suggest-bullets] claude request failed:", err);
+    return NextResponse.json({ error: "claude_request_failed", retryable: true }, { status: 502 });
+  }
+
+  let suggestions: ReturnType<typeof parseBulletSuggestionsResponse>;
+  try {
     suggestions = parseBulletSuggestionsResponse(res);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "AI generation failed";
-    const isParseError = msg.includes("Invalid") || msg.includes("Expected");
-    console.error("[suggest-bullets] AI error:", e);
-    return NextResponse.json({ error: msg }, { status: isParseError ? 422 : 502 });
+  } catch (err) {
+    console.error("[suggest-bullets] claude response parse failed:", err);
+    return NextResponse.json({ error: "parse_failed", retryable: false }, { status: 422 });
   }
 
   const priorMax = await prisma.draftedContent.aggregate({

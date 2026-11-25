@@ -55,10 +55,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     toneGuidance: "Direct, concrete, specific. Lead with evidence. No filler.",
   };
 
+  // The provider's error text and the parser's messages stay in the server
+  // log. The browser only ever gets one of two fixed codes.
   const claude = getClaude();
-  let output: ReturnType<typeof parseCoverLetterResponse>;
+  let res;
   try {
-    const res = await claude.messages.create(
+    res = await claude.messages.create(
       buildCoverLetterRequest({
         cached,
         jobPostingText:
@@ -69,12 +71,17 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         ...(parsed.data.override !== undefined ? { override: parsed.data.override } : {}),
       }),
     );
+  } catch (err) {
+    console.error("[draft-cover-letter] claude request failed:", err);
+    return NextResponse.json({ error: "claude_request_failed", retryable: true }, { status: 502 });
+  }
+
+  let output: ReturnType<typeof parseCoverLetterResponse>;
+  try {
     output = parseCoverLetterResponse(res);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "AI generation failed";
-    const isParseError = msg.includes("Invalid") || msg.includes("Expected");
-    console.error("[draft-cover-letter] AI error:", e);
-    return NextResponse.json({ error: msg }, { status: isParseError ? 422 : 502 });
+  } catch (err) {
+    console.error("[draft-cover-letter] claude response parse failed:", err);
+    return NextResponse.json({ error: "parse_failed", retryable: false }, { status: 422 });
   }
 
   const priorMax = await prisma.draftedContent.aggregate({
