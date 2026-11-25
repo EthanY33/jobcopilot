@@ -154,7 +154,7 @@ export function readKeyFromHeaders(req: Request): Key;
 
 ### 6.2 Threats accepted (documented for users)
 
-- **XSS on jobcopilot.com:** any same-origin script can read localStorage. Standard for any web app holding tokens. Mitigation: strict CSP (already enforced by Next.js defaults; tighten further in Phase 2a).
+- **XSS on jobcopilot.com:** any same-origin script can read localStorage. Standard for any web app holding tokens. Mitigation: Next.js sends no CSP by default. Today only a frame-ancestors-only CSP plus nosniff, Referrer-Policy, X-Frame-Options and Permissions-Policy are set (apps/web/next.config.mjs); a script-src CSP needs per-request nonces and is not yet enforced, so add it in Phase 2a.
 - **Browser extension reads localStorage:** any user-installed extension with broad permissions can read localStorage. Out of scope to mitigate.
 - **TLS-trust-in-Ethan's-server:** users have to trust the server doesn't log. Mitigation: settings-page security copy explicitly states this; route-handler code is open source for audit.
 
