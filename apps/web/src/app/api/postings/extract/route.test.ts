@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   findUnique: vi.fn(),
   upsert: vi.fn(),
+  appFindUnique: vi.fn(),
   claudeCreate: vi.fn(),
   parse: vi.fn(),
 }));
@@ -23,13 +24,14 @@ vi.mock("@jobcopilot/prompts", () => ({
 vi.mock("@jobcopilot/db", () => ({
   prisma: {
     jobPosting: { findUnique: mocks.findUnique, create: mocks.create, update: mocks.update },
-    application: { upsert: mocks.upsert },
+    application: { upsert: mocks.upsert, findUnique: mocks.appFindUnique },
   },
 }));
 
 import { POST } from "./route";
 
 const URL_IN = "https://boards.greenhouse.io/acme/jobs/1";
+const DAY = 24 * 3600 * 1000;
 const extracted = {
   company: "Acme",
   title: "Engineer",
@@ -125,5 +127,107 @@ describe("POST /api/postings/extract", () => {
     mocks.create.mockResolvedValue(row({ id: "new" }));
     await POST(req());
     expect(mocks.create.mock.calls[0][0].data.rawHtml).toBe("ab");
+  });
+
+  // ---- tests the review asks for ----
+
+  it("does not trust a cached row dated in the future", async () => {
+    mocks.findUnique.mockResolvedValue(row({ discoveredAt: new Date(Date.now() + 365 * DAY) }));
+    mocks.update.mockResolvedValue(row({ ...extracted }));
+    const res = await POST(req());
+    expect(mocks.scrape).toHaveBeenCalledTimes(1);
+    expect((await res.json()).extracted.description).toBe("fresh description");
+  });
+
+  it("re-extracts a fresh cached row that has no description and no requirements", async () => {
+    mocks.findUnique.mockResolvedValue(row({ description: "", requirements: [] }));
+    mocks.update.mockResolvedValue(row({ ...extracted }));
+    const res = await POST(req());
+    expect(mocks.scrape).toHaveBeenCalledTimes(1);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect((await res.json()).extracted.description).toBe("fresh description");
+  });
+
+  it("keeps a good stale row when the refresh comes back empty", async () => {
+    mocks.findUnique.mockResolvedValue(row({ discoveredAt: new Date(Date.now() - 30 * DAY) }));
+    mocks.parse.mockReturnValue({ ...extracted, description: " ", requirements: [] });
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    expect(mocks.scrape).toHaveBeenCalledTimes(1);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect((await res.json()).extracted.description).toBe("cached description");
+  });
+
+  it("falls back to the stale row when the update fails", async () => {
+    mocks.findUnique.mockResolvedValue(row({ discoveredAt: new Date(Date.now() - 30 * DAY) }));
+    mocks.update.mockRejectedValue(new Error("db hiccup"));
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    expect((await res.json()).extracted.description).toBe("cached description");
+  });
+
+  it("returns a JSON 500 when saving the application fails", async () => {
+    mocks.findUnique.mockResolvedValue(null);
+    mocks.create.mockResolvedValue(row({ id: "new" }));
+    mocks.upsert.mockRejectedValue(new Error("connection lost"));
+    const res = await POST(req());
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toBe("application_save_failed");
+  });
+
+  it("recovers when a concurrent request created the application first (P2002)", async () => {
+    mocks.findUnique.mockResolvedValue(row());
+    mocks.upsert.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }));
+    mocks.appFindUnique.mockResolvedValue({ id: "a-winner" });
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    expect((await res.json()).applicationId).toBe("a-winner");
+  });
+
+  it("rejects a PDF body without calling Claude", async () => {
+    mocks.findUnique.mockResolvedValue(null);
+    const pdf = "%PDF-1.7\n" + "\u0000\u0001�".repeat(200);
+    mocks.scrape.mockResolvedValue({ html: pdf, text: pdf, detectedAts: "manual" });
+    const res = await POST(req());
+    expect(res.status).toBe(415);
+    expect((await res.json()).error).toBe("unsupported_content");
+    expect(mocks.claudeCreate).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects binary noise that has no PDF header", async () => {
+    mocks.findUnique.mockResolvedValue(null);
+    const noise = "PK\u0003\u0004" + "�\u0000a".repeat(500);
+    mocks.scrape.mockResolvedValue({ html: noise, text: noise, detectedAts: "manual" });
+    const res = await POST(req());
+    expect(res.status).toBe(415);
+    expect(mocks.claudeCreate).not.toHaveBeenCalled();
+  });
+
+  it("still accepts a text page with one stray NUL byte", async () => {
+    mocks.findUnique.mockResolvedValue(null);
+    const html = "<html><body>" + "A real job description. ".repeat(50) + "\u0000</body></html>";
+    mocks.scrape.mockResolvedValue({ html, text: html, detectedAts: "greenhouse" });
+    mocks.create.mockResolvedValue(row({ id: "new" }));
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    expect(mocks.claudeCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("strips NUL bytes from every extracted field", async () => {
+    mocks.findUnique.mockResolvedValue(null);
+    mocks.parse.mockReturnValue({
+      company: "A\u0000cme",
+      title: "En\u0000g",
+      location: "N\u0000Y",
+      requirements: ["t\u0000s"],
+      description: "d\u0000esc",
+      sourceAts: "greenhouse",
+    });
+    mocks.create.mockResolvedValue(row({ id: "new" }));
+    const res = await POST(req());
+    const stored = mocks.create.mock.calls[0][0].data;
+    expect(Object.values(stored).flat().join("")).not.toContain("\u0000");
+    expect(JSON.stringify((await res.json()).extracted)).not.toContain("\\u0000");
   });
 });
