@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { GlassCard } from "@/components/brand/glass-card";
+import { COVER_LETTER_OVERRIDE_MAX_CHARS } from "@jobcopilot/shared";
 
 interface Draft {
   id: string;
@@ -88,7 +89,7 @@ export function CoverLetterDrafter({ application, variants }: Props) {
         alternateOpenings?: string[];
         error?: unknown;
       };
-      if (!r.ok) throw new Error(String(json.error ?? "draft failed"));
+      if (!r.ok) throw new Error(typeof json.error === "string" ? json.error : "draft failed");
       const newDraft: Draft & { kind: string } = {
         id: json.draftId!,
         version: json.version!,
@@ -186,6 +187,7 @@ export function CoverLetterDrafter({ application, variants }: Props) {
           <Label htmlFor="override">Focus note (optional)</Label>
           <Textarea
             id="override"
+            maxLength={COVER_LETTER_OVERRIDE_MAX_CHARS}
             value={override}
             onChange={(e) => setOverride(e.target.value)}
             placeholder="e.g., emphasize Claude API work"

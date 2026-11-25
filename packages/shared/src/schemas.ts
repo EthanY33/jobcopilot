@@ -26,11 +26,13 @@ export const extractedJobPostingSchema = z.object({
   sourceAts: atsSourceSchema,
 });
 
+export const COVER_LETTER_OVERRIDE_MAX_CHARS = 2000;
+
 export const draftCoverLetterRequestSchema = z.object({
   applicationId: z.string().uuid(),
   resumeVariantId: z.string().uuid(),
   // "focus on X". Goes into the prompt and is stored with the draft, so it is capped.
-  override: z.string().max(2000).optional(),
+  override: z.string().max(COVER_LETTER_OVERRIDE_MAX_CHARS).optional(),
 });
 
 export const draftCoverLetterResponseSchema = z.object({

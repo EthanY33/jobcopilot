@@ -75,6 +75,22 @@ describe("CoverLetterDrafter", () => {
     expect(box.value).toBe("Dear Team,\n\nALT ONE. More.\n\nPara two.");
   });
 
+  it("caps the focus note at 2000 characters", () => {
+    render(<CoverLetterDrafter application={application} variants={variants} />);
+    expect(screen.getByLabelText(/Focus note/i).getAttribute("maxlength")).toBe("2000");
+  });
+
+  it("shows a generic message when the server returns an object error", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: { formErrors: [], fieldErrors: { override: ["too long"] } } }),
+    });
+    render(<CoverLetterDrafter application={application} variants={variants} />);
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    expect(await screen.findByText("draft failed")).toBeTruthy();
+    expect(screen.queryByText(/\[object Object\]/)).toBeNull();
+  });
+
   it("reselecting a saved version shows the saved edit and finalizes it", async () => {
     render(<CoverLetterDrafter application={application} variants={variants} />);
     const box = screen.getAllByRole("textbox")[0] as HTMLTextAreaElement;
