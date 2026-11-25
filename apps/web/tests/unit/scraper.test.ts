@@ -13,6 +13,7 @@ import {
   type ScrapeRequest,
   type ScrapeResponse,
 } from "@/lib/scraper";
+import { E2E_FIXTURE_URL } from "../e2e/e2e-guards";
 
 describe("detectAts", () => {
   it("detects greenhouse", () => {
@@ -543,9 +544,9 @@ describe("scrape", () => {
   // tests/e2e/google-referral.spec.ts scrapes a fixture page served by the dev
   // server itself, so that one URL has to stay reachable outside production.
   describe("dev server fixture", () => {
-    const fixture = "http://localhost:3000/api/test-mock/google-fixture";
+    const fixtures = ["http://localhost:3000/api/test-mock/google-fixture", E2E_FIXTURE_URL];
 
-    it("is reachable outside production", async () => {
+    it.each(fixtures)("is reachable outside production: %s", async (fixture) => {
       const resolve = dns({ localhost: ["::1", "127.0.0.1"] });
       const fetch = web({ [fixture]: () => page("<p>Fixture</p>") });
 
@@ -555,7 +556,7 @@ describe("scrape", () => {
       expect(fetch.mock.calls[0]?.[0].addresses).toEqual(["::1", "127.0.0.1"]);
     });
 
-    it("is blocked in production", async () => {
+    it.each(fixtures)("is blocked in production: %s", async (fixture) => {
       vi.stubEnv("NODE_ENV", "production");
       const resolve = dns({ localhost: ["::1", "127.0.0.1"] });
       const fetch = web({});
@@ -566,6 +567,8 @@ describe("scrape", () => {
 
     it.each([
       "http://localhost:3000/api/applications",
+      "http://localhost:3100/api/applications",
+      "http://127.0.0.1:3100/api/test-mock/google-fixture",
       "http://localhost:3000/api/test-mock/../applications",
       "http://localhost:5432/api/test-mock/google-fixture",
       "http://127.0.0.1:3000/api/test-mock/google-fixture",

@@ -162,13 +162,15 @@ function isBlockedAddress(address: string): boolean {
 }
 
 // The Playwright flow (tests/e2e/google-referral.spec.ts) scrapes a fixture
-// page served by the dev server itself. Those routes return 404 in production
-// and this exemption is off there too.
+// page served by the app itself. The Playwright server runs on :3100 (E2E_PORT
+// in tests/e2e/e2e-guards.ts); scripts/build-screenshots.ts still uses the
+// :3000 dev server. Those routes return 404 in production and this exemption
+// is off there too.
 function isDevFixture(url: URL): boolean {
   return (
     process.env.NODE_ENV !== "production" &&
     url.protocol === "http:" &&
-    url.host === "localhost:3000" &&
+    (url.host === "localhost:3000" || url.host === "localhost:3100") &&
     url.pathname.startsWith("/api/test-mock/")
   );
 }
